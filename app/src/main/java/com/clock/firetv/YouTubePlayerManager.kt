@@ -1,20 +1,31 @@
 package com.clock.firetv
 
-import android.annotation.SuppressLint
+import android.content.Context
+import android.util.Log
 import android.view.ViewGroup
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
 
 class YouTubePlayerManager(
-    private val webView: WebView,
-    private val container: ViewGroup
+    private val context: Context,
+    private val playerView: PlayerView,
+    private val container: ViewGroup,
+    private val scope: CoroutineScope
 ) {
 
     companion object {
+        private const val TAG = "YouTubePlayerMgr"
         private val PLAYLIST_URL_PATTERN = Pattern.compile("[?&]list=([A-Za-z0-9_-]+)")
         private val VIDEO_URL_PATTERN = Pattern.compile("[?&]v=([A-Za-z0-9_-]{11})")
         private val SHORT_URL_PATTERN = Pattern.compile("youtu\\.be/([A-Za-z0-9_-]{11})")
@@ -22,36 +33,36 @@ class YouTubePlayerManager(
         private val BARE_VIDEO_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{11}$")
     }
 
-    private var currentUrl: String? = null
+    private var player: ExoPlayer? = null
+    private val streamResolver = StreamResolver()
 
-    @SuppressLint("SetJavaScriptEnabled")
+    // Playlist state
+    private var playlistVideoUrls: List<String> = emptyList()
+    private var currentIndex = 0
+    private var currentVideoUrl: String? = null
+    private var currentLoadJob: Job? = null
+
+    @OptIn(UnstableApi::class)
     fun initialize() {
-        webView.settings.apply {
-            javaScriptEnabled = true
-            mediaPlaybackRequiresUserGesture = false
-            domStorageEnabled = true
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            cacheMode = WebSettings.LOAD_DEFAULT
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            // User agent to avoid mobile redirects
-            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        player = ExoPlayer.Builder(context).build().also { exo ->
+            playerView.player = exo
+            playerView.useController = false
+            playerView.isFocusable = false
+            playerView.isFocusableInTouchMode = false
+            playerView.setBackgroundColor(0xFF000000.toInt())
+
+            exo.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_ENDED) {
+                        playNext()
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    handlePlaybackError(error)
+                }
+            })
         }
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(
-                view: WebView?,
-                request: WebResourceRequest?
-            ): Boolean {
-                // Keep navigation within the WebView
-                return false
-            }
-        }
-
-        webView.webChromeClient = WebChromeClient()
-
-        // Set background to black
-        webView.setBackgroundColor(0xFF000000.toInt())
     }
 
     fun loadVideo(urlOrId: String) {
@@ -60,23 +71,151 @@ class YouTubePlayerManager(
             return
         }
 
-        val parsed = parseInput(urlOrId) ?: return
-        currentUrl = urlOrId
-
-        val embedUrl = when (parsed) {
-            is YouTubeContent.Playlist -> buildPlaylistEmbed(parsed.playlistId)
-            is YouTubeContent.Video -> buildVideoEmbed(parsed.videoId, parsed.playlistId)
+        val parsed = parseInput(urlOrId)
+        if (parsed == null) {
+            Log.w(TAG, "Unrecognized input: $urlOrId")
+            return
         }
 
-        val html = buildEmbedHtml(embedUrl)
-        // Load with a base URL to set proper referrer, avoiding Error 153
-        webView.loadDataWithBaseURL(
-            "https://www.youtube.com",
-            html,
-            "text/html",
-            "UTF-8",
-            null
-        )
+        currentLoadJob?.cancel()
+        currentLoadJob = scope.launch {
+            when (parsed) {
+                is YouTubeContent.Playlist -> loadPlaylist(parsed.playlistId)
+                is YouTubeContent.Video -> {
+                    if (parsed.playlistId != null) {
+                        loadPlaylistStartingAtVideo(parsed.playlistId, parsed.videoId)
+                    } else {
+                        loadSingleVideo(parsed.videoId)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun loadSingleVideo(videoId: String) {
+        playlistVideoUrls = emptyList()
+        currentIndex = 0
+        val videoUrl = "https://www.youtube.com/watch?v=$videoId"
+        currentVideoUrl = videoUrl
+        resolveAndPlay(videoUrl)
+    }
+
+    private suspend fun loadPlaylist(playlistId: String) {
+        val playlistUrl = "https://www.youtube.com/playlist?list=$playlistId"
+        val items = streamResolver.extractPlaylistItems(playlistUrl)
+        if (items.isEmpty()) {
+            Log.w(TAG, "Playlist is empty or failed to extract: $playlistId")
+            return
+        }
+        playlistVideoUrls = items
+        currentIndex = 0
+        currentVideoUrl = items[0]
+        resolveAndPlay(items[0])
+    }
+
+    private suspend fun loadPlaylistStartingAtVideo(playlistId: String, videoId: String) {
+        val playlistUrl = "https://www.youtube.com/playlist?list=$playlistId"
+        val items = streamResolver.extractPlaylistItems(playlistUrl)
+        if (items.isEmpty()) {
+            // Fallback to single video
+            loadSingleVideo(videoId)
+            return
+        }
+        playlistVideoUrls = items
+        val idx = items.indexOfFirst { it.contains(videoId) }
+        currentIndex = if (idx >= 0) idx else 0
+        currentVideoUrl = items[currentIndex]
+        resolveAndPlay(items[currentIndex])
+    }
+
+    private suspend fun resolveAndPlay(videoUrl: String) {
+        val streamUrl = streamResolver.resolveStreamUrl(videoUrl)
+        if (streamUrl == null) {
+            Log.w(TAG, "Failed to resolve stream for $videoUrl")
+            // Skip to next if in playlist
+            if (playlistVideoUrls.isNotEmpty()) {
+                playNext()
+            }
+            return
+        }
+        withContext(Dispatchers.Main) {
+            player?.let { exo ->
+                exo.setMediaItem(MediaItem.fromUri(streamUrl))
+                exo.prepare()
+                exo.play()
+            }
+        }
+    }
+
+    private fun playNext() {
+        if (playlistVideoUrls.isEmpty()) return
+
+        currentIndex = (currentIndex + 1) % playlistVideoUrls.size
+        currentVideoUrl = playlistVideoUrls[currentIndex]
+
+        currentLoadJob?.cancel()
+        currentLoadJob = scope.launch {
+            resolveAndPlay(playlistVideoUrls[currentIndex])
+        }
+    }
+
+    private fun handlePlaybackError(error: PlaybackException) {
+        Log.e(TAG, "Playback error: ${error.errorCode}", error)
+
+        val isHttpError = error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
+        val videoUrl = currentVideoUrl
+
+        if (isHttpError && videoUrl != null) {
+            // Likely expired stream URL (HTTP 403) — re-resolve
+            currentLoadJob?.cancel()
+            currentLoadJob = scope.launch {
+                val freshUrl = streamResolver.resolveStreamUrl(videoUrl)
+                if (freshUrl != null) {
+                    withContext(Dispatchers.Main) {
+                        player?.let { exo ->
+                            exo.setMediaItem(MediaItem.fromUri(freshUrl))
+                            exo.prepare()
+                            exo.play()
+                        }
+                    }
+                } else {
+                    // Re-resolution failed — skip to next or stop
+                    withContext(Dispatchers.Main) { skipOrStop() }
+                }
+            }
+        } else {
+            // Non-HTTP error — skip to next or stop
+            skipOrStop()
+        }
+    }
+
+    private fun skipOrStop() {
+        if (playlistVideoUrls.isNotEmpty()) {
+            playNext()
+        } else {
+            stop()
+        }
+    }
+
+    fun togglePlayPause() {
+        player?.let { exo ->
+            if (exo.isPlaying) exo.pause() else exo.play()
+        }
+    }
+
+    fun stop() {
+        currentLoadJob?.cancel()
+        player?.stop()
+        player?.clearMediaItems()
+        playlistVideoUrls = emptyList()
+        currentIndex = 0
+        currentVideoUrl = null
+    }
+
+    fun destroy() {
+        currentLoadJob?.cancel()
+        player?.release()
+        player = null
     }
 
     fun updateSize(widthDp: Int, heightDp: Int) {
@@ -87,25 +226,9 @@ class YouTubePlayerManager(
         container.layoutParams = params
     }
 
-    fun stop() {
-        webView.loadUrl("about:blank")
-        currentUrl = null
-    }
-
-    fun destroy() {
-        webView.stopLoading()
-        webView.loadUrl("about:blank")
-        webView.destroy()
-    }
-
-    fun reload() {
-        currentUrl?.let { loadVideo(it) }
-    }
-
     private fun parseInput(input: String): YouTubeContent? {
         val trimmed = input.trim()
 
-        // Check for playlist URL
         val playlistMatcher = PLAYLIST_URL_PATTERN.matcher(trimmed)
         val videoMatcher = VIDEO_URL_PATTERN.matcher(trimmed)
 
@@ -119,70 +242,24 @@ class YouTubePlayerManager(
             }
         }
 
-        // Check for video URL with v= param
         if (videoMatcher.find()) {
             return YouTubeContent.Video(videoMatcher.group(1) ?: return null, null)
         }
 
-        // Check for short URL (youtu.be)
         val shortMatcher = SHORT_URL_PATTERN.matcher(trimmed)
         if (shortMatcher.find()) {
             return YouTubeContent.Video(shortMatcher.group(1) ?: return null, null)
         }
 
-        // Check for bare playlist ID
         if (BARE_PLAYLIST_PATTERN.matcher(trimmed).matches()) {
             return YouTubeContent.Playlist(trimmed)
         }
 
-        // Check for bare video ID (11 characters)
         if (BARE_VIDEO_PATTERN.matcher(trimmed).matches()) {
             return YouTubeContent.Video(trimmed, null)
         }
 
         return null
-    }
-
-    private fun buildPlaylistEmbed(playlistId: String): String {
-        return "https://www.youtube.com/embed/videoseries?list=$playlistId&autoplay=1&loop=1&mute=0&controls=1&rel=0&modestbranding=1&enablejsapi=1"
-    }
-
-    private fun buildVideoEmbed(videoId: String, playlistId: String?): String {
-        val base = "https://www.youtube.com/embed/$videoId?autoplay=1&controls=1&rel=0&modestbranding=1&enablejsapi=1"
-        return if (playlistId != null) {
-            "$base&list=$playlistId&loop=1"
-        } else {
-            "$base&loop=1&playlist=$videoId"
-        }
-    }
-
-    private fun buildEmbedHtml(embedUrl: String): String {
-        return """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-                <meta name="referrer" content="always">
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-                    iframe {
-                        width: 100%;
-                        height: 100%;
-                        border: none;
-                    }
-                </style>
-            </head>
-            <body>
-                <iframe
-                    src="$embedUrl"
-                    allow="autoplay; encrypted-media; picture-in-picture"
-                    allowfullscreen
-                    referrerpolicy="origin">
-                </iframe>
-            </body>
-            </html>
-        """.trimIndent()
     }
 
     private sealed class YouTubeContent {

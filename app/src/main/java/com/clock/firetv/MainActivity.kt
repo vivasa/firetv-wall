@@ -6,16 +6,19 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
-import android.webkit.WebView
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.localization.ContentCountry
+import org.schabi.newpipe.extractor.localization.Localization
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -181,14 +184,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initManagers() {
+        // Initialize NewPipeExtractor for YouTube stream resolution
+        NewPipe.init(OkHttpDownloader(), Localization("en", "US"), ContentCountry("US"))
+
         val wallpaperFront = findViewById<android.widget.ImageView>(R.id.wallpaperFront)
         val wallpaperBack = findViewById<android.widget.ImageView>(R.id.wallpaperBack)
-        val webView = findViewById<WebView>(R.id.youtubeWebView)
+        val playerView = findViewById<PlayerView>(R.id.youtubePlayerView)
 
         driftAnimator = DriftAnimator(clockContainer)
         wallpaperMgr = WallpaperManager(wallpaperFront, wallpaperBack, scope)
         chimeMgr = ChimeManager(chimeIndicator, chimeDot)
-        youtubeMgr = YouTubePlayerManager(webView, youtubeContainer)
+        youtubeMgr = YouTubePlayerManager(this, playerView, youtubeContainer, scope)
         youtubeMgr.initialize()
     }
 
@@ -215,6 +221,7 @@ class MainActivity : AppCompatActivity() {
             youtubeMgr.loadVideo(settings.youtubeUrl)
         } else {
             youtubeContainer.visibility = View.GONE
+            youtubeMgr.stop()
         }
     }
 
@@ -260,11 +267,9 @@ class MainActivity : AppCompatActivity() {
             amPmView.text = amPmFmt.format(now)
         }
 
-        // Timezone label with abbreviation
+        // Timezone abbreviation only (e.g. EST, IST)
         val abbrev = tz.getDisplayName(tz.inDaylightTime(now), TimeZone.SHORT, Locale.US)
-        val idx = timezoneIds.indexOf(timezoneId)
-        val friendlyName = if (idx >= 0) timezoneLabels[idx] else timezoneId
-        labelView.text = "$friendlyName ($abbrev)".uppercase()
+        labelView.text = abbrev.uppercase()
 
         dateView.text = dateFmt.format(now)
     }
@@ -320,20 +325,36 @@ class MainActivity : AppCompatActivity() {
 
     // ---- Settings Navigation ----
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (settingsVisible) {
-            return handleSettingsKey(keyCode)
-        }
-
-        return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_CENTER,
-            KeyEvent.KEYCODE_ENTER,
-            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                showSettings()
-                true
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Intercept all key events before child views can consume them
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (settingsVisible) {
+                return handleSettingsKey(event.keyCode)
             }
-            else -> super.onKeyDown(keyCode, event)
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    showSettings()
+                    return true
+                }
+                // Play/pause YouTube with media keys or MENU button
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                KeyEvent.KEYCODE_MEDIA_PLAY,
+                KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                    youtubeMgr.togglePlayPause()
+                    return true
+                }
+                KeyEvent.KEYCODE_BACK -> {
+                    // Let onBackPressed handle this
+                }
+            }
         }
+        // Block all other key events from reaching child views when not in settings
+        if (!settingsVisible && event.keyCode != KeyEvent.KEYCODE_BACK) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onBackPressed() {

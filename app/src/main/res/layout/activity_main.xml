@@ -41,7 +41,7 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center_vertical"
-        android:paddingStart="115dp"
+        android:paddingStart="80dp"
         android:paddingEnd="16dp">
 
         <!-- Primary Clock -->
@@ -64,7 +64,7 @@
                     android:layout_height="wrap_content"
                     android:text="12:00"
                     android:textColor="@color/primary_text"
-                    android:textSize="130sp"
+                    android:textSize="86sp"
                     android:fontFamily="monospace"
                     android:letterSpacing="0.02"
                     android:includeFontPadding="false" />
@@ -73,8 +73,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginBottom="24dp">
+                    android:layout_marginStart="6dp"
+                    android:layout_marginBottom="16dp">
 
                     <TextView
                         android:id="@+id/primarySeconds"
@@ -82,7 +82,7 @@
                         android:layout_height="wrap_content"
                         android:text="00"
                         android:textColor="@color/secondary_text"
-                        android:textSize="36sp"
+                        android:textSize="24sp"
                         android:fontFamily="monospace"
                         android:includeFontPadding="false" />
 
@@ -92,7 +92,7 @@
                         android:layout_height="wrap_content"
                         android:text="AM"
                         android:textColor="@color/secondary_text"
-                        android:textSize="28sp"
+                        android:textSize="20sp"
                         android:fontFamily="monospace"
                         android:includeFontPadding="false"
                         android:layout_marginTop="2dp" />
@@ -104,9 +104,9 @@
                 android:id="@+id/primaryLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="US EASTERN (EST)"
+                android:text="EST"
                 android:textColor="@color/secondary_text"
-                android:textSize="16sp"
+                android:textSize="14sp"
                 android:fontFamily="monospace"
                 android:textAllCaps="true"
                 android:letterSpacing="0.15"
@@ -119,18 +119,18 @@
                 android:layout_height="wrap_content"
                 android:text="Sat, Mar 1, 2026"
                 android:textColor="@color/accent"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:fontFamily="monospace"
                 android:layout_marginTop="4dp" />
         </LinearLayout>
 
         <!-- Divider -->
         <View
-            android:layout_width="400dp"
+            android:layout_width="300dp"
             android:layout_height="1dp"
             android:background="@drawable/divider_gradient"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp" />
 
         <!-- Secondary Clock in glass card -->
         <LinearLayout
@@ -229,23 +229,26 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- YouTube player container (bottom-right) -->
+    <!-- YouTube player container (top-right, sized dynamically) -->
     <FrameLayout
         android:id="@+id/youtubeContainer"
         android:layout_width="380dp"
         android:layout_height="214dp"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="24dp"
-        android:layout_marginBottom="24dp"
+        android:layout_gravity="top|end"
+        android:layout_marginEnd="32dp"
+        android:layout_marginTop="32dp"
         android:background="@drawable/youtube_player_bg"
         android:clipChildren="true"
         android:clipToPadding="true"
         android:visibility="gone">
 
-        <android.webkit.WebView
-            android:id="@+id/youtubeWebView"
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/youtubePlayerView"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:focusable="false"
+            android:focusableInTouchMode="false"
+            android:background="@android:color/black" />
     </FrameLayout>
 
     <!-- Chime indicator (top-right) -->

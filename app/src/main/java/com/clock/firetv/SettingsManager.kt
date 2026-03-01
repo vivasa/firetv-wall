@@ -74,8 +74,8 @@ class SettingsManager(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_PLAYER_VISIBLE, value).apply()
 
     fun getPlayerDimensions(): Pair<Int, Int> = when (playerSize) {
-        PLAYER_SMALL -> 280 to 158
-        PLAYER_LARGE -> 500 to 281
-        else -> 380 to 214
+        PLAYER_SMALL -> 240 to 135
+        PLAYER_LARGE -> 426 to 240
+        else -> 320 to 180
     }
 }
