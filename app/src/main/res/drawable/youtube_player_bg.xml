@@ -1,9 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#CC000000" />
-    <stroke
-        android:width="1dp"
-        android:color="#33FFFFFF" />
-    <corners android:radius="12dp" />
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Outer glow ring -->
+    <item
+        android:bottom="-3dp"
+        android:left="-3dp"
+        android:right="-3dp"
+        android:top="-3dp">
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="6dp"
+                android:color="#18FFFFFF" />
+            <corners android:radius="18dp" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+    <!-- Mid glow ring -->
+    <item
+        android:bottom="-1dp"
+        android:left="-1dp"
+        android:right="-1dp"
+        android:top="-1dp">
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="2dp"
+                android:color="#22FFFFFF" />
+            <corners android:radius="14dp" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+    <!-- Inner border and background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#CC000000" />
+            <stroke
+                android:width="1dp"
+                android:color="#40FFFFFF" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+
+</layer-list>

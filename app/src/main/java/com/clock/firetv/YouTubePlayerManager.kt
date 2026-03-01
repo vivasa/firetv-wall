@@ -147,7 +147,7 @@ class YouTubePlayerManager(
         }
     }
 
-    private fun playNext() {
+    fun playNext() {
         if (playlistVideoUrls.isEmpty()) return
 
         currentIndex = (currentIndex + 1) % playlistVideoUrls.size
@@ -202,6 +202,40 @@ class YouTubePlayerManager(
             if (exo.isPlaying) exo.pause() else exo.play()
         }
     }
+
+    fun playPrevious() {
+        if (playlistVideoUrls.isEmpty()) return
+
+        currentIndex = if (currentIndex > 0) {
+            currentIndex - 1
+        } else {
+            playlistVideoUrls.size - 1
+        }
+        currentVideoUrl = playlistVideoUrls[currentIndex]
+
+        currentLoadJob?.cancel()
+        currentLoadJob = scope.launch {
+            resolveAndPlay(playlistVideoUrls[currentIndex])
+        }
+    }
+
+    fun seekForward(ms: Long = 10_000) {
+        player?.let { exo ->
+            val newPos = exo.currentPosition + ms
+            if (newPos < exo.duration) {
+                exo.seekTo(newPos)
+            }
+        }
+    }
+
+    fun seekBackward(ms: Long = 10_000) {
+        player?.let { exo ->
+            val newPos = (exo.currentPosition - ms).coerceAtLeast(0)
+            exo.seekTo(newPos)
+        }
+    }
+
+    fun hasPlaylist(): Boolean = playlistVideoUrls.isNotEmpty()
 
     fun stop() {
         currentLoadJob?.cancel()

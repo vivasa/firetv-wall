@@ -1,13 +1,16 @@
 package com.clock.firetv
 
+import android.graphics.Outline
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -59,6 +62,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settingsItems: List<View>
     private var settingsFocusIndex = 0
     private var settingsVisible = false
+
+    // Settings snapshot for detecting player-relevant changes
+    private var snapshotYoutubeUrl = ""
+    private var snapshotPlayerVisible = false
+    private var snapshotPlayerSize = 0
+
+    // Transport controls
+    private lateinit var transportControls: LinearLayout
+    private lateinit var transportButtons: List<ImageButton>
+    private var transportControlsVisible = false
+    private var transportFocusIndex = 0
+    private val transportAutoHideHandler = Handler(Looper.getMainLooper())
+    private val transportAutoHideRunnable = Runnable { hideTransportControls() }
 
     // Settings value views
     private lateinit var valuePrimaryTz: TextView
@@ -167,6 +183,15 @@ class MainActivity : AppCompatActivity() {
         valuePlayerSize = findViewById(R.id.valuePlayerSize)
         valueShowPlayer = findViewById(R.id.valueShowPlayer)
 
+        // Transport controls
+        transportControls = findViewById(R.id.transportControls)
+        transportButtons = listOf(
+            findViewById(R.id.btnSkipPrevious),
+            findViewById(R.id.btnRewind),
+            findViewById(R.id.btnFastForward),
+            findViewById(R.id.btnSkipNext)
+        )
+
         // Collect settings items for D-pad navigation
         settingsItems = listOf(
             findViewById(R.id.settingPrimaryTz),
@@ -196,9 +221,23 @@ class MainActivity : AppCompatActivity() {
         chimeMgr = ChimeManager(chimeIndicator, chimeDot)
         youtubeMgr = YouTubePlayerManager(this, playerView, youtubeContainer, scope)
         youtubeMgr.initialize()
+
+        // Clip video content to rounded corners
+        val cornerRadius = 12f * resources.displayMetrics.density
+        youtubeContainer.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
+            }
+        }
+        youtubeContainer.clipToOutline = true
     }
 
     private fun applySettings() {
+        applyNonPlayerSettings()
+        applyPlayerSettings()
+    }
+
+    private fun applyNonPlayerSettings() {
         // Drift
         if (settings.driftEnabled) driftAnimator.start() else driftAnimator.stop()
 
@@ -211,8 +250,9 @@ class MainActivity : AppCompatActivity() {
 
         // Chime
         if (settings.chimeEnabled) chimeMgr.scheduleNextChime() else chimeMgr.stop()
+    }
 
-        // YouTube
+    private fun applyPlayerSettings() {
         val dims = settings.getPlayerDimensions()
         youtubeMgr.updateSize(dims.first, dims.second)
 
@@ -323,14 +363,19 @@ class MainActivity : AppCompatActivity() {
         dimAnimHandler.post(fadeRunnable)
     }
 
-    // ---- Settings Navigation ----
+    // ---- Input Navigation ----
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Intercept all key events before child views can consume them
         if (event.action == KeyEvent.ACTION_DOWN) {
+            // Settings mode takes priority
             if (settingsVisible) {
                 return handleSettingsKey(event.keyCode)
             }
+            // Transport controls mode
+            if (transportControlsVisible) {
+                return handleTransportKey(event.keyCode)
+            }
+            // Normal mode
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER,
@@ -338,7 +383,13 @@ class MainActivity : AppCompatActivity() {
                     showSettings()
                     return true
                 }
-                // Play/pause YouTube with media keys or MENU button
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (youtubeContainer.visibility == View.VISIBLE) {
+                        showTransportControls()
+                        return true
+                    }
+                }
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_PLAY,
                 KeyEvent.KEYCODE_MEDIA_PAUSE -> {
@@ -350,8 +401,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        // Block all other key events from reaching child views when not in settings
-        if (!settingsVisible && event.keyCode != KeyEvent.KEYCODE_BACK) {
+        if (!settingsVisible && !transportControlsVisible && event.keyCode != KeyEvent.KEYCODE_BACK) {
             return true
         }
         return super.dispatchKeyEvent(event)
@@ -360,6 +410,8 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (settingsVisible) {
             hideSettings()
+        } else if (transportControlsVisible) {
+            hideTransportControls()
         } else {
             @Suppress("DEPRECATION")
             super.onBackPressed()
@@ -367,8 +419,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettings() {
+        // Dismiss transport controls if visible
+        if (transportControlsVisible) {
+            hideTransportControls()
+        }
+
         settingsVisible = true
         settingsFocusIndex = 0
+
+        // Snapshot player-relevant settings before opening
+        snapshotYoutubeUrl = settings.youtubeUrl
+        snapshotPlayerVisible = settings.playerVisible
+        snapshotPlayerSize = settings.playerSize
+
         settingsOverlay.visibility = View.VISIBLE
         settingsOverlay.alpha = 0f
         settingsOverlay.animate().alpha(1f).setDuration(300).start()
@@ -392,8 +455,20 @@ class MainActivity : AppCompatActivity() {
             }
             .start()
 
-        // Re-apply settings in case anything changed
-        applySettings()
+        // Apply non-player settings unconditionally
+        applyNonPlayerSettings()
+
+        // Only reload player if player-relevant settings changed
+        val urlChanged = settings.youtubeUrl != snapshotYoutubeUrl
+        val visibilityChanged = settings.playerVisible != snapshotPlayerVisible
+        val sizeChanged = settings.playerSize != snapshotPlayerSize
+
+        if (urlChanged || visibilityChanged) {
+            applyPlayerSettings()
+        } else if (sizeChanged) {
+            val dims = settings.getPlayerDimensions()
+            youtubeMgr.updateSize(dims.first, dims.second)
+        }
     }
 
     private fun handleSettingsKey(keyCode: Int): Boolean {
@@ -522,6 +597,94 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ---- Transport Controls ----
+
+    private fun showTransportControls() {
+        transportControlsVisible = true
+        transportFocusIndex = 1 // Start on rewind button
+        transportControls.visibility = View.VISIBLE
+        transportControls.animate().alpha(1f).setDuration(200).start()
+        updateTransportFocus()
+        resetTransportAutoHide()
+    }
+
+    private fun hideTransportControls() {
+        transportControlsVisible = false
+        transportAutoHideHandler.removeCallbacks(transportAutoHideRunnable)
+        transportControls.animate()
+            .alpha(0f)
+            .setDuration(200)
+            .withEndAction {
+                transportControls.visibility = View.GONE
+            }
+            .start()
+    }
+
+    private fun resetTransportAutoHide() {
+        transportAutoHideHandler.removeCallbacks(transportAutoHideRunnable)
+        transportAutoHideHandler.postDelayed(transportAutoHideRunnable, 5000)
+    }
+
+    private fun handleTransportKey(keyCode: Int): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_BACK -> {
+                hideTransportControls()
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (transportFocusIndex > 0) {
+                    transportFocusIndex--
+                    updateTransportFocus()
+                }
+                resetTransportAutoHide()
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (transportFocusIndex < transportButtons.size - 1) {
+                    transportFocusIndex++
+                    updateTransportFocus()
+                }
+                resetTransportAutoHide()
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                activateTransportButton()
+                resetTransportAutoHide()
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                resetTransportAutoHide()
+                true
+            }
+            else -> {
+                hideTransportControls()
+                true
+            }
+        }
+    }
+
+    private fun updateTransportFocus() {
+        transportButtons.forEachIndexed { index, button ->
+            if (index == transportFocusIndex) {
+                button.setBackgroundResource(R.drawable.transport_button_focused_bg)
+            } else {
+                button.setBackgroundColor(0x00000000)
+            }
+        }
+    }
+
+    private fun activateTransportButton() {
+        when (transportFocusIndex) {
+            0 -> youtubeMgr.playPrevious()     // Skip previous
+            1 -> youtubeMgr.seekBackward()     // Rewind 10s
+            2 -> youtubeMgr.seekForward()      // Fast-forward 10s
+            3 -> youtubeMgr.playNext()         // Skip next
+        }
+    }
+
     private fun loadSettingsToUI() {
         val primaryIdx = timezoneIds.indexOf(settings.primaryTimezone).coerceAtLeast(0)
         val secondaryIdx = timezoneIds.indexOf(settings.secondaryTimezone).coerceAtLeast(0)
@@ -580,6 +743,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
         dimAnimHandler.removeCallbacksAndMessages(null)
+        transportAutoHideHandler.removeCallbacksAndMessages(null)
         driftAnimator.stop()
         wallpaperMgr.stop()
         chimeMgr.stop()

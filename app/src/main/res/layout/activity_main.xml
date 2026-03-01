@@ -237,9 +237,10 @@
         android:layout_gravity="top|end"
         android:layout_marginEnd="32dp"
         android:layout_marginTop="32dp"
+        android:padding="3dp"
         android:background="@drawable/youtube_player_bg"
-        android:clipChildren="true"
-        android:clipToPadding="true"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:visibility="gone">
 
         <androidx.media3.ui.PlayerView
@@ -249,6 +250,72 @@
             android:focusable="false"
             android:focusableInTouchMode="false"
             android:background="@android:color/black" />
+
+        <!-- Transport controls overlay (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/transportControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/transport_controls_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:alpha="0"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/btnSkipPrevious"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="Previous"
+                android:focusable="false"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_skip_previous" />
+
+            <ImageButton
+                android:id="@+id/btnRewind"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="Rewind 10s"
+                android:focusable="false"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_replay_10" />
+
+            <ImageButton
+                android:id="@+id/btnFastForward"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="Forward 10s"
+                android:focusable="false"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_forward_10" />
+
+            <ImageButton
+                android:id="@+id/btnSkipNext"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="Next"
+                android:focusable="false"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_skip_next" />
+
+        </LinearLayout>
     </FrameLayout>
 
     <!-- Chime indicator (top-right) -->
