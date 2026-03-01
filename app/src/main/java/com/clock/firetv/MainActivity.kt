@@ -5,10 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
-import android.view.animation.AlphaAnimation
-import android.view.animation.TranslateAnimation
 import android.webkit.WebView
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -424,7 +421,7 @@ class MainActivity : AppCompatActivity() {
                 // Scroll into view if needed
                 view.parent?.let { parent ->
                     if (parent is View) {
-                        (parent.parent as? android.widget.ScrollView)?.smoothScrollTo(0, view.top - 40)
+                        ((parent as View).parent as? android.widget.ScrollView)?.smoothScrollTo(0, view.top - 40)
                     }
                 }
             } else {
