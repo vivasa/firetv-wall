@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="timezone_ids">
+        <item>America/New_York</item>
+        <item>America/Chicago</item>
+        <item>America/Denver</item>
+        <item>America/Los_Angeles</item>
+        <item>America/Sao_Paulo</item>
+        <item>Europe/London</item>
+        <item>Europe/Paris</item>
+        <item>Europe/Berlin</item>
+        <item>Africa/Nairobi</item>
+        <item>Asia/Dubai</item>
+        <item>Asia/Kolkata</item>
+        <item>Asia/Colombo</item>
+        <item>Asia/Dhaka</item>
+        <item>Asia/Singapore</item>
+        <item>Asia/Hong_Kong</item>
+        <item>Asia/Shanghai</item>
+        <item>Asia/Seoul</item>
+        <item>Asia/Tokyo</item>
+        <item>Australia/Sydney</item>
+        <item>Pacific/Auckland</item>
+    </string-array>
+
+    <string-array name="timezone_labels">
+        <item>US Eastern (New York)</item>
+        <item>US Central (Chicago)</item>
+        <item>US Mountain (Denver)</item>
+        <item>US Pacific (Los Angeles)</item>
+        <item>Brazil (São Paulo)</item>
+        <item>UK (London)</item>
+        <item>France (Paris)</item>
+        <item>Germany (Berlin)</item>
+        <item>East Africa (Nairobi)</item>
+        <item>UAE (Dubai)</item>
+        <item>India (Kolkata)</item>
+        <item>Sri Lanka (Colombo)</item>
+        <item>Bangladesh (Dhaka)</item>
+        <item>Singapore</item>
+        <item>Hong Kong</item>
+        <item>China (Shanghai)</item>
+        <item>South Korea (Seoul)</item>
+        <item>Japan (Tokyo)</item>
+        <item>Australia (Sydney)</item>
+        <item>New Zealand (Auckland)</item>
+    </string-array>
+
+    <string-array name="time_format_options">
+        <item>12-hour</item>
+        <item>24-hour</item>
+    </string-array>
+
+    <string-array name="wallpaper_interval_options">
+        <item>1 min</item>
+        <item>5 min</item>
+        <item>10 min</item>
+        <item>30 min</item>
+    </string-array>
+
+    <integer-array name="wallpaper_interval_values">
+        <item>1</item>
+        <item>5</item>
+        <item>10</item>
+        <item>30</item>
+    </integer-array>
+
+    <string-array name="player_size_options">
+        <item>Small</item>
+        <item>Medium</item>
+        <item>Large</item>
+    </string-array>
+</resources>

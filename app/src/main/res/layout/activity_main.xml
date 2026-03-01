@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:keepScreenOn="true">
+
+    <!-- Wallpaper layer: two ImageViews for crossfade -->
+    <ImageView
+        android:id="@+id/wallpaperBack"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:background="@drawable/fallback_gradient" />
+
+    <ImageView
+        android:id="@+id/wallpaperFront"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop" />
+
+    <!-- Dark overlay for readability -->
+    <View
+        android:id="@+id/darkOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#8C0A0A12" />
+
+    <!-- Vignette overlay -->
+    <View
+        android:id="@+id/vignetteOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/vignette_overlay" />
+
+    <!-- Driftable clock container -->
+    <LinearLayout
+        android:id="@+id/clockContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:paddingStart="115dp"
+        android:paddingEnd="16dp">
+
+        <!-- Primary Clock -->
+        <LinearLayout
+            android:id="@+id/primaryClockLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Time row: HH:MM + seconds -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="bottom">
+
+                <TextView
+                    android:id="@+id/primaryTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="12:00"
+                    android:textColor="@color/primary_text"
+                    android:textSize="130sp"
+                    android:fontFamily="monospace"
+                    android:letterSpacing="0.02"
+                    android:includeFontPadding="false" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginBottom="24dp">
+
+                    <TextView
+                        android:id="@+id/primarySeconds"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00"
+                        android:textColor="@color/secondary_text"
+                        android:textSize="36sp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false" />
+
+                    <TextView
+                        android:id="@+id/primaryAmPm"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="AM"
+                        android:textColor="@color/secondary_text"
+                        android:textSize="28sp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Timezone label -->
+            <TextView
+                android:id="@+id/primaryLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="US EASTERN (EST)"
+                android:textColor="@color/secondary_text"
+                android:textSize="16sp"
+                android:fontFamily="monospace"
+                android:textAllCaps="true"
+                android:letterSpacing="0.15"
+                android:layout_marginTop="4dp" />
+
+            <!-- Date -->
+            <TextView
+                android:id="@+id/primaryDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sat, Mar 1, 2026"
+                android:textColor="@color/accent"
+                android:textSize="18sp"
+                android:fontFamily="monospace"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <!-- Divider -->
+        <View
+            android:layout_width="400dp"
+            android:layout_height="1dp"
+            android:background="@drawable/divider_gradient"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Secondary Clock in glass card -->
+        <LinearLayout
+            android:id="@+id/secondaryClockCard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/glass_card_bg"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp">
+
+            <!-- Time -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="bottom">
+
+                <TextView
+                    android:id="@+id/secondaryTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="10:30"
+                    android:textColor="@color/primary_text"
+                    android:textSize="48sp"
+                    android:fontFamily="monospace"
+                    android:includeFontPadding="false" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginBottom="4dp">
+
+                    <TextView
+                        android:id="@+id/secondarySeconds"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00"
+                        android:textColor="@color/secondary_text"
+                        android:textSize="16sp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false" />
+
+                    <TextView
+                        android:id="@+id/secondaryAmPm"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="PM"
+                        android:textColor="@color/secondary_text"
+                        android:textSize="14sp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Separator -->
+            <View
+                android:layout_width="1dp"
+                android:layout_height="48dp"
+                android:background="@color/divider"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp" />
+
+            <!-- Label and date -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/secondaryLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="INDIA (IST)"
+                    android:textColor="@color/secondary_text"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.12" />
+
+                <TextView
+                    android:id="@+id/secondaryDate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sat, Mar 1, 2026"
+                    android:textColor="@color/accent"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- YouTube player container (bottom-right) -->
+    <FrameLayout
+        android:id="@+id/youtubeContainer"
+        android:layout_width="380dp"
+        android:layout_height="214dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/youtube_player_bg"
+        android:clipChildren="true"
+        android:clipToPadding="true"
+        android:visibility="gone">
+
+        <android.webkit.WebView
+            android:id="@+id/youtubeWebView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <!-- Chime indicator (top-right) -->
+    <LinearLayout
+        android:id="@+id/chimeIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="24dp"
+        android:background="@drawable/chime_pill_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:alpha="0"
+        android:visibility="gone">
+
+        <View
+            android:id="@+id/chimeDot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@color/accent" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="@string/chime_label"
+            android:textColor="@color/primary_text"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:textAllCaps="true"
+            android:letterSpacing="0.1" />
+    </LinearLayout>
+
+    <!-- Night dim overlay -->
+    <View
+        android:id="@+id/nightDimOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:alpha="0"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <!-- Settings hint (bottom-left) -->
+    <TextView
+        android:id="@+id/settingsHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="24dp"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_hint"
+        android:textColor="@color/secondary_text"
+        android:textSize="12sp"
+        android:fontFamily="monospace"
+        android:alpha="0.5" />
+
+    <!-- Settings overlay (hidden by default) -->
+    <FrameLayout
+        android:id="@+id/settingsOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/settings_overlay"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <include layout="@layout/dialog_settings" />
+    </FrameLayout>
+
+</FrameLayout>

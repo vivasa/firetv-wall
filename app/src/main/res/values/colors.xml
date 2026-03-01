@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_overlay">#8C0A0A12</color>
+    <color name="glass_bg">#0FFFFFFF</color>
+    <color name="glass_border">#1AFFFFFF</color>
+    <color name="primary_text">#F0EEE6</color>
+    <color name="secondary_text">#8CF0EEE6</color>
+    <color name="accent">#E8A44A</color>
+    <color name="accent_glow">#40E8A44A</color>
+    <color name="night_dim_overlay">#73000000</color>
+    <color name="settings_overlay">#CC000000</color>
+    <color name="settings_card_bg">#E6181820</color>
+    <color name="settings_focused_border">#E8A44A</color>
+    <color name="settings_item_bg">#1AFFFFFF</color>
+    <color name="settings_item_focused_bg">#33E8A44A</color>
+    <color name="divider">#33FFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="transparent">#00000000</color>
+    <color name="fallback_gradient_start">#1a1a2e</color>
+    <color name="fallback_gradient_end">#16213e</color>
+    <color name="chime_pill_bg">#CC1A1A2E</color>
+    <color name="youtube_border">#33FFFFFF</color>
+</resources>

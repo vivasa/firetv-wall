@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FireTV Clock</string>
+    <string name="settings_hint">Press ENTER for settings</string>
+    <string name="chime_label">Chime</string>
+    <string name="settings_title">Settings</string>
+    <string name="label_primary_timezone">Primary Timezone</string>
+    <string name="label_secondary_timezone">Secondary Timezone</string>
+    <string name="label_time_format">Time Format</string>
+    <string name="label_chime">Chime Every 30 Min</string>
+    <string name="label_wallpaper_rotation">Wallpaper Rotation</string>
+    <string name="label_wallpaper_interval">Wallpaper Interval</string>
+    <string name="label_burnin_drift">Anti Burn-in Drift</string>
+    <string name="label_night_dim">Night Auto-Dim (11pm–6am)</string>
+    <string name="label_youtube_url">YouTube Playlist / Video URL</string>
+    <string name="label_player_size">Player Size</string>
+    <string name="label_show_player">Show YouTube Player</string>
+    <string name="hint_youtube_url">Enter playlist URL or video ID</string>
+    <string name="format_12h">12-hour</string>
+    <string name="format_24h">24-hour</string>
+</resources>
