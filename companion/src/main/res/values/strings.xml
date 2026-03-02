@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TV Companion</string>
+    <string name="tab_devices">Devices</string>
+    <string name="tab_remote">Remote</string>
+    <string name="tab_settings">Settings</string>
+</resources>

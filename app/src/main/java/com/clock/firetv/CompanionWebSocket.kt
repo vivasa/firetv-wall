@@ -8,6 +8,7 @@ import fi.iki.elonen.NanoWSD
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.util.concurrent.Executors
 
 class CompanionWebSocket(
     private val settings: SettingsManager,
@@ -43,6 +44,7 @@ class CompanionWebSocket(
     val actualPort: Int get() = listeningPort
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val sendExecutor = Executors.newSingleThreadExecutor()
     private var activeSocket: CompanionSocket? = null
 
     // Pairing state
@@ -63,9 +65,11 @@ class CompanionWebSocket(
     }
 
     fun sendEvent(json: JSONObject) {
-        activeSocket?.let { socket ->
+        val socket = activeSocket ?: return
+        val text = json.toString()
+        sendExecutor.execute {
             try {
-                socket.send(json.toString())
+                socket.send(text)
             } catch (e: IOException) {
                 Log.w(TAG, "Failed to send event", e)
             }
@@ -351,10 +355,13 @@ class CompanionWebSocket(
         }
 
         fun sendEvt(json: JSONObject) {
-            try {
-                send(json.toString())
-            } catch (e: IOException) {
-                Log.w(TAG, "Failed to send", e)
+            val text = json.toString()
+            sendExecutor.execute {
+                try {
+                    send(text)
+                } catch (e: IOException) {
+                    Log.w(TAG, "Failed to send", e)
+                }
             }
         }
 

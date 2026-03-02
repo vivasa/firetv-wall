@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "FireTVClock"
 include(":app")
+include(":companion")
