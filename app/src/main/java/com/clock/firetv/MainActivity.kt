@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     private var settingsVisible = false
 
     // Settings snapshot for detecting player-relevant changes
+    private var snapshotTheme = 0
     private var snapshotActivePreset = -1
     private var snapshotPlayerVisible = false
     private var snapshotPlayerSize = 0
@@ -95,6 +96,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     private lateinit var valueNightDim: TextView
     private lateinit var valueActivePreset: TextView
     private lateinit var valuePlayerSize: TextView
+    private lateinit var valueTheme: TextView
     private lateinit var valueShowPlayer: TextView
     private lateinit var qrCodeImage: ImageView
     private lateinit var companionUrlText: TextView
@@ -137,9 +139,11 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         )
 
-        setContentView(R.layout.activity_main)
-
         settings = SettingsManager(this)
+
+        val layoutRes = if (settings.theme == SettingsManager.THEME_GALLERY)
+            R.layout.activity_main_gallery else R.layout.activity_main
+        setContentView(layoutRes)
         settings.migrateFromSingleUrl()
         loadResourceArrays()
         bindViews()
@@ -186,6 +190,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         nowPlayingLabel = findViewById(R.id.nowPlayingLabel)
 
         // Settings value views
+        valueTheme = findViewById(R.id.valueTheme)
         valuePrimaryTz = findViewById(R.id.valuePrimaryTz)
         valueSecondaryTz = findViewById(R.id.valueSecondaryTz)
         valueTimeFormat = findViewById(R.id.valueTimeFormat)
@@ -211,6 +216,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
         // Collect settings items for D-pad navigation
         settingsItems = listOf(
+            findViewById(R.id.settingTheme),
             findViewById(R.id.settingPrimaryTz),
             findViewById(R.id.settingSecondaryTz),
             findViewById(R.id.settingTimeFormat),
@@ -241,7 +247,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         youtubeMgr.initialize()
 
         // Clip video content to rounded corners
-        val cornerRadius = 12f * resources.displayMetrics.density
+        val cornerRadiusDp = if (settings.theme == SettingsManager.THEME_GALLERY) 4f else 12f
+        val cornerRadius = cornerRadiusDp * resources.displayMetrics.density
         youtubeContainer.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 outline.setRoundRect(0, 0, view.width, view.height, cornerRadius)
@@ -447,7 +454,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         settingsVisible = true
         settingsFocusIndex = 0
 
-        // Snapshot player-relevant settings before opening
+        // Snapshot settings before opening
+        snapshotTheme = settings.theme
         snapshotActivePreset = settings.activePreset
         snapshotPlayerVisible = settings.playerVisible
         snapshotPlayerSize = settings.playerSize
@@ -461,6 +469,12 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
     private fun hideSettings() {
         settingsVisible = false
+
+        // If theme changed, recreate the Activity with the new layout
+        if (settings.theme != snapshotTheme) {
+            recreate()
+            return
+        }
 
         settingsOverlay.animate()
             .alpha(0f)
@@ -543,47 +557,53 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
     private fun adjustSettingValue(direction: Int) {
         when (settingsFocusIndex) {
-            0 -> { // Primary timezone
+            0 -> { // Theme
+                val newTheme = if (settings.theme == SettingsManager.THEME_CLASSIC)
+                    SettingsManager.THEME_GALLERY else SettingsManager.THEME_CLASSIC
+                settings.theme = newTheme
+                valueTheme.text = if (newTheme == SettingsManager.THEME_GALLERY) "Gallery" else "Classic"
+            }
+            1 -> { // Primary timezone
                 val idx = (timezoneIds.indexOf(settings.primaryTimezone) + direction)
                     .coerceIn(0, timezoneIds.size - 1)
                 settings.primaryTimezone = timezoneIds[idx]
                 valuePrimaryTz.text = timezoneLabels[idx]
             }
-            1 -> { // Secondary timezone
+            2 -> { // Secondary timezone
                 val idx = (timezoneIds.indexOf(settings.secondaryTimezone) + direction)
                     .coerceIn(0, timezoneIds.size - 1)
                 settings.secondaryTimezone = timezoneIds[idx]
                 valueSecondaryTz.text = timezoneLabels[idx]
             }
-            2 -> { // Time format
+            3 -> { // Time format
                 val fmt = if (direction > 0) SettingsManager.FORMAT_24H else SettingsManager.FORMAT_12H
                 settings.timeFormat = fmt
                 valueTimeFormat.text = if (fmt == SettingsManager.FORMAT_24H) "24-hour" else "12-hour"
             }
-            3 -> { // Chime toggle
+            4 -> { // Chime toggle
                 settings.chimeEnabled = !settings.chimeEnabled
                 valueChime.text = if (settings.chimeEnabled) "ON" else "OFF"
             }
-            4 -> { // Wallpaper toggle
+            5 -> { // Wallpaper toggle
                 settings.wallpaperEnabled = !settings.wallpaperEnabled
                 valueWallpaper.text = if (settings.wallpaperEnabled) "ON" else "OFF"
             }
-            5 -> { // Wallpaper interval
+            6 -> { // Wallpaper interval
                 val currentIdx = wallpaperIntervalValues.indexOf(settings.wallpaperIntervalMinutes)
                 val newIdx = (currentIdx + direction).coerceIn(0, wallpaperIntervalValues.size - 1)
                 settings.wallpaperIntervalMinutes = wallpaperIntervalValues[newIdx]
                 valueWallpaperInterval.text = wallpaperIntervalOptions[newIdx]
                 wallpaperMgr.updateInterval(settings.wallpaperIntervalMinutes)
             }
-            6 -> { // Drift toggle
+            7 -> { // Drift toggle
                 settings.driftEnabled = !settings.driftEnabled
                 valueDrift.text = if (settings.driftEnabled) "ON" else "OFF"
             }
-            7 -> { // Night dim toggle
+            8 -> { // Night dim toggle
                 settings.nightDimEnabled = !settings.nightDimEnabled
                 valueNightDim.text = if (settings.nightDimEnabled) "ON" else "OFF"
             }
-            8 -> { // Active preset — cycle through None, Preset 1–4
+            9 -> { // Active preset — cycle through None, Preset 1–4
                 val current = settings.activePreset
                 // Options: -1 (None), 0, 1, 2, 3
                 val newPreset = if (direction > 0) {
@@ -594,14 +614,14 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 settings.activePreset = newPreset
                 valueActivePreset.text = getPresetDisplayLabel(newPreset)
             }
-            9 -> { // Player size
+            10 -> { // Player size
                 val newSize = (settings.playerSize + direction).coerceIn(0, 2)
                 settings.playerSize = newSize
                 valuePlayerSize.text = playerSizeOptions[newSize]
                 val dims = settings.getPlayerDimensions()
                 youtubeMgr.updateSize(dims.first, dims.second)
             }
-            10 -> { // Show player toggle
+            11 -> { // Show player toggle
                 settings.playerVisible = !settings.playerVisible
                 valueShowPlayer.text = if (settings.playerVisible) "ON" else "OFF"
             }
@@ -610,12 +630,13 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
     private fun toggleOrConfirmSetting() {
         when (settingsFocusIndex) {
-            3 -> adjustSettingValue(0) // Chime toggle
-            4 -> adjustSettingValue(0) // Wallpaper toggle
-            6 -> adjustSettingValue(0) // Drift toggle
-            7 -> adjustSettingValue(0) // Night dim toggle
-            8 -> adjustSettingValue(1) // Cycle preset forward
-            10 -> adjustSettingValue(0) // Show player toggle
+            0 -> adjustSettingValue(1)  // Theme toggle
+            4 -> adjustSettingValue(0)  // Chime toggle
+            5 -> adjustSettingValue(0)  // Wallpaper toggle
+            7 -> adjustSettingValue(0)  // Drift toggle
+            8 -> adjustSettingValue(0)  // Night dim toggle
+            9 -> adjustSettingValue(1)  // Cycle preset forward
+            11 -> adjustSettingValue(0) // Show player toggle
             else -> adjustSettingValue(1) // Cycle forward for dropdowns
         }
     }
@@ -709,6 +730,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     }
 
     private fun loadSettingsToUI() {
+        valueTheme.text = if (settings.theme == SettingsManager.THEME_GALLERY) "Gallery" else "Classic"
         val primaryIdx = timezoneIds.indexOf(settings.primaryTimezone).coerceAtLeast(0)
         val secondaryIdx = timezoneIds.indexOf(settings.secondaryTimezone).coerceAtLeast(0)
 

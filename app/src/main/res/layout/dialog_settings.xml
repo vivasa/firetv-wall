@@ -27,6 +27,40 @@
             android:letterSpacing="0.15"
             android:layout_marginBottom="28dp" />
 
+        <!-- 0. Theme -->
+        <LinearLayout
+            android:id="@+id/settingTheme"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/settings_item_bg"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:layout_marginBottom="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/label_theme"
+                android:textColor="@color/primary_text"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/valueTheme"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Classic"
+                android:textColor="@color/accent"
+                android:textSize="13sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
         <!-- 1. Primary Timezone -->
         <LinearLayout
             android:id="@+id/settingPrimaryTz"

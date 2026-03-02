@@ -33,7 +33,16 @@ class SettingsManager(context: Context) {
         const val PLAYER_LARGE = 2
 
         const val PRESET_COUNT = 4
+
+        const val THEME_CLASSIC = 0
+        const val THEME_GALLERY = 1
+
+        private const val KEY_THEME = "theme"
     }
+
+    var theme: Int
+        get() = prefs.getInt(KEY_THEME, THEME_CLASSIC)
+        set(value) = prefs.edit().putInt(KEY_THEME, value).apply()
 
     var primaryTimezone: String
         get() = prefs.getString(KEY_PRIMARY_TZ, "America/New_York") ?: "America/New_York"
@@ -114,9 +123,12 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean(KEY_PRESETS_MIGRATED, true).apply()
     }
 
-    fun getPlayerDimensions(): Pair<Int, Int> = when (playerSize) {
-        PLAYER_SMALL -> 240 to 135
-        PLAYER_LARGE -> 426 to 240
+    fun getPlayerDimensions(): Pair<Int, Int> = when {
+        theme == THEME_GALLERY && playerSize == PLAYER_SMALL -> 528 to 297
+        theme == THEME_GALLERY && playerSize == PLAYER_MEDIUM -> 640 to 360
+        theme == THEME_GALLERY && playerSize == PLAYER_LARGE -> 744 to 418
+        playerSize == PLAYER_SMALL -> 240 to 135
+        playerSize == PLAYER_LARGE -> 426 to 240
         else -> 320 to 180
     }
 }
