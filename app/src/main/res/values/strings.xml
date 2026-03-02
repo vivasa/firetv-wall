@@ -19,4 +19,5 @@
     <string name="hint_youtube_url">Enter playlist URL or video ID</string>
     <string name="format_12h">12-hour</string>
     <string name="format_24h">24-hour</string>
+    <string name="link_label">Linked</string>
 </resources>

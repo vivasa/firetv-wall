@@ -52,8 +52,9 @@ dependencies {
     // OkHttp for NewPipeExtractor's Downloader
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // NanoHTTPD for companion web server
+    // NanoHTTPD for companion web server + WebSocket
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")
 
     // Media3 ExoPlayer for native video playback
     val media3Version = "1.5.1"
