@@ -36,6 +36,8 @@ class SettingsManager(context: Context) {
 
         const val THEME_CLASSIC = 0
         const val THEME_GALLERY = 1
+        const val THEME_RETRO = 2
+        const val THEME_COUNT = 3
 
         private const val KEY_THEME = "theme"
     }
@@ -127,6 +129,9 @@ class SettingsManager(context: Context) {
         theme == THEME_GALLERY && playerSize == PLAYER_SMALL -> 528 to 297
         theme == THEME_GALLERY && playerSize == PLAYER_MEDIUM -> 640 to 360
         theme == THEME_GALLERY && playerSize == PLAYER_LARGE -> 744 to 418
+        theme == THEME_RETRO && playerSize == PLAYER_SMALL -> 384 to 216
+        theme == THEME_RETRO && playerSize == PLAYER_MEDIUM -> 480 to 270
+        theme == THEME_RETRO && playerSize == PLAYER_LARGE -> 576 to 324
         playerSize == PLAYER_SMALL -> 240 to 135
         playerSize == PLAYER_LARGE -> 426 to 240
         else -> 320 to 180

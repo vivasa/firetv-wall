@@ -141,8 +141,11 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
         settings = SettingsManager(this)
 
-        val layoutRes = if (settings.theme == SettingsManager.THEME_GALLERY)
-            R.layout.activity_main_gallery else R.layout.activity_main
+        val layoutRes = when (settings.theme) {
+            SettingsManager.THEME_GALLERY -> R.layout.activity_main_gallery
+            SettingsManager.THEME_RETRO -> R.layout.activity_main_retro
+            else -> R.layout.activity_main
+        }
         setContentView(layoutRes)
         settings.migrateFromSingleUrl()
         loadResourceArrays()
@@ -247,7 +250,11 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         youtubeMgr.initialize()
 
         // Clip video content to rounded corners
-        val cornerRadiusDp = if (settings.theme == SettingsManager.THEME_GALLERY) 4f else 12f
+        val cornerRadiusDp = when (settings.theme) {
+            SettingsManager.THEME_GALLERY -> 4f
+            SettingsManager.THEME_RETRO -> 8f
+            else -> 12f
+        }
         val cornerRadius = cornerRadiusDp * resources.displayMetrics.density
         youtubeContainer.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
@@ -558,10 +565,10 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     private fun adjustSettingValue(direction: Int) {
         when (settingsFocusIndex) {
             0 -> { // Theme
-                val newTheme = if (settings.theme == SettingsManager.THEME_CLASSIC)
-                    SettingsManager.THEME_GALLERY else SettingsManager.THEME_CLASSIC
+                val themeNames = arrayOf("Classic", "Gallery", "Retro")
+                val newTheme = (settings.theme + direction + SettingsManager.THEME_COUNT) % SettingsManager.THEME_COUNT
                 settings.theme = newTheme
-                valueTheme.text = if (newTheme == SettingsManager.THEME_GALLERY) "Gallery" else "Classic"
+                valueTheme.text = themeNames[newTheme]
             }
             1 -> { // Primary timezone
                 val idx = (timezoneIds.indexOf(settings.primaryTimezone) + direction)
@@ -730,7 +737,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     }
 
     private fun loadSettingsToUI() {
-        valueTheme.text = if (settings.theme == SettingsManager.THEME_GALLERY) "Gallery" else "Classic"
+        val themeNames = arrayOf("Classic", "Gallery", "Retro")
+        valueTheme.text = themeNames[settings.theme.coerceIn(0, themeNames.size - 1)]
         val primaryIdx = timezoneIds.indexOf(settings.primaryTimezone).coerceAtLeast(0)
         val secondaryIdx = timezoneIds.indexOf(settings.secondaryTimezone).coerceAtLeast(0)
 

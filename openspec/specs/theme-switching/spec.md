@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Theme preference storage
-The system SHALL persist the user's selected theme in SharedPreferences using a `theme` key with integer values (0 = Classic, 1 = Gallery).
+The system SHALL persist the user's selected theme in SharedPreferences using a `theme` key with integer values (0 = Classic, 1 = Gallery, 2 = Retro).
 
 #### Scenario: Default theme
 - **WHEN** no theme preference has been set (first launch or fresh install)
@@ -21,8 +21,9 @@ The system SHALL provide a "Theme" setting row in the settings panel that allows
 
 #### Scenario: Cycle themes with D-pad
 - **WHEN** the Theme setting row is focused and the user presses D-pad left or right
-- **THEN** the setting cycles between "Classic" and "Gallery"
+- **THEN** the setting cycles between "Classic", "Gallery", and "Retro" in order
 - **AND** the current value is displayed in the settings row
+- **AND** cycling wraps around (Retro → right → Classic, Classic → left → Retro)
 
 ### Requirement: Theme application via Activity recreate
 The system SHALL apply theme changes by calling `activity.recreate()` when the user closes the settings panel after changing the theme. The recreated Activity SHALL load the layout file corresponding to the selected theme.
@@ -42,11 +43,12 @@ The system SHALL apply theme changes by calling `activity.recreate()` when the u
 - **WHEN** the Activity starts (including after `recreate()`)
 - **THEN** the system reads the theme preference before calling `setContentView()`
 - **AND** if the theme is Gallery, it uses `R.layout.activity_main_gallery`
+- **AND** if the theme is Retro, it uses `R.layout.activity_main_retro`
 - **AND** if the theme is Classic (or default), it uses `R.layout.activity_main`
 - **AND** all subsequent `bindViews()` and manager initialization works identically regardless of which layout was loaded
 
 ### Requirement: Theme-aware player dimensions
-The `getPlayerDimensions()` method SHALL return different dimensions based on the current theme, providing larger sizes for Gallery mode.
+The `getPlayerDimensions()` method SHALL return different dimensions based on the current theme.
 
 #### Scenario: Player dimensions in Classic theme
 - **WHEN** the theme is Classic
@@ -55,6 +57,11 @@ The `getPlayerDimensions()` method SHALL return different dimensions based on th
 #### Scenario: Player dimensions in Gallery theme
 - **WHEN** the theme is Gallery
 - **THEN** `getPlayerDimensions()` returns Gallery-specific sizes (Small: 528x297, Medium: 640x360, Large: 744x418)
+- **AND** all sizes maintain a 16:9 aspect ratio
+
+#### Scenario: Player dimensions in Retro theme
+- **WHEN** the theme is Retro
+- **THEN** `getPlayerDimensions()` returns Retro-specific sizes (Small: 384x216, Medium: 480x270, Large: 576x324)
 - **AND** all sizes maintain a 16:9 aspect ratio
 
 ### Requirement: Theme snapshot for change detection

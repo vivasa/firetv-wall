@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1A1612"
+    android:keepScreenOn="true">
+
+    <!-- Wallpaper layer: present for view ID compatibility but hidden in Retro -->
+    <ImageView
+        android:id="@+id/wallpaperBack"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/wallpaperFront"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <!-- Dark overlay: not needed in Retro (solid body color) -->
+    <View
+        android:id="@+id/darkOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- Vignette overlay (subtle edge darkening) -->
+    <View
+        android:id="@+id/vignetteOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/vignette_overlay" />
+
+    <!-- clockContainer wraps ALL content for DriftAnimator -->
+    <LinearLayout
+        android:id="@+id/clockContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingTop="20dp"
+        android:paddingBottom="16dp"
+        android:paddingStart="32dp"
+        android:paddingEnd="32dp">
+
+        <!-- YouTube player container (centered "tape window") -->
+        <FrameLayout
+            android:id="@+id/youtubeContainer"
+            android:layout_width="480dp"
+            android:layout_height="270dp"
+            android:layout_gravity="center_horizontal"
+            android:padding="3dp"
+            android:background="@drawable/retro_player_bg"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:visibility="gone">
+
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/youtubePlayerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:background="@android:color/black" />
+
+            <!-- Transport controls overlay -->
+            <LinearLayout
+                android:id="@+id/transportControls"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/transport_controls_bg"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:alpha="0"
+                android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/btnSkipPrevious"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Previous"
+                    android:focusable="false"
+                    android:padding="6dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_skip_previous" />
+
+                <ImageButton
+                    android:id="@+id/btnRewind"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Rewind 10s"
+                    android:focusable="false"
+                    android:padding="6dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_replay_10" />
+
+                <ImageButton
+                    android:id="@+id/btnFastForward"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Forward 10s"
+                    android:focusable="false"
+                    android:padding="6dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_forward_10" />
+
+                <ImageButton
+                    android:id="@+id/btnSkipNext"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Next"
+                    android:focusable="false"
+                    android:padding="6dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_skip_next" />
+
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- Now playing label (cassette label style) -->
+        <TextView
+            android:id="@+id/nowPlayingLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/retro_now_playing_bg"
+            android:ellipsize="end"
+            android:fontFamily="monospace"
+            android:maxWidth="480dp"
+            android:singleLine="true"
+            android:textColor="#2C2418"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <!-- Spacer to push display panel to bottom -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Clock display panel -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/retro_display_panel_bg"
+            android:orientation="horizontal"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp">
+
+            <!-- Primary clock (left side) -->
+            <LinearLayout
+                android:id="@+id/primaryClockLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <!-- Time row -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="bottom">
+
+                    <TextView
+                        android:id="@+id/primaryTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="12:00"
+                        android:textColor="#E8A850"
+                        android:textSize="42sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.02"
+                        android:includeFontPadding="false" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginBottom="6dp">
+
+                        <TextView
+                            android:id="@+id/primarySeconds"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="00"
+                            android:textColor="#A07840"
+                            android:textSize="16sp"
+                            android:fontFamily="monospace"
+                            android:includeFontPadding="false" />
+
+                        <TextView
+                            android:id="@+id/primaryAmPm"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="AM"
+                            android:textColor="#A07840"
+                            android:textSize="13sp"
+                            android:fontFamily="monospace"
+                            android:includeFontPadding="false" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Timezone label -->
+                <TextView
+                    android:id="@+id/primaryLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="EST"
+                    android:textColor="#A07840"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.15"
+                    android:layout_marginTop="2dp" />
+
+                <!-- Date -->
+                <TextView
+                    android:id="@+id/primaryDate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sat, Mar 1, 2026"
+                    android:textColor="#E8A850"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <!-- Secondary clock (right side) -->
+            <LinearLayout
+                android:id="@+id/secondaryClockCard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="end">
+
+                <!-- Time row -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="bottom">
+
+                    <TextView
+                        android:id="@+id/secondaryTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="10:30"
+                        android:textColor="#E8A850"
+                        android:textSize="42sp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginBottom="6dp">
+
+                        <TextView
+                            android:id="@+id/secondarySeconds"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="00"
+                            android:textColor="#A07840"
+                            android:textSize="16sp"
+                            android:fontFamily="monospace"
+                            android:includeFontPadding="false" />
+
+                        <TextView
+                            android:id="@+id/secondaryAmPm"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="PM"
+                            android:textColor="#A07840"
+                            android:textSize="13sp"
+                            android:fontFamily="monospace"
+                            android:includeFontPadding="false" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Timezone label -->
+                <TextView
+                    android:id="@+id/secondaryLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="IST"
+                    android:textColor="#A07840"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.12"
+                    android:gravity="end"
+                    android:layout_marginTop="2dp" />
+
+                <!-- Date -->
+                <TextView
+                    android:id="@+id/secondaryDate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sat, Mar 1, 2026"
+                    android:textColor="#E8A850"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:gravity="end"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Chime indicator (top-right) -->
+    <LinearLayout
+        android:id="@+id/chimeIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="24dp"
+        android:background="@drawable/chime_pill_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:alpha="0"
+        android:visibility="gone">
+
+        <View
+            android:id="@+id/chimeDot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@color/accent" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:text="@string/chime_label"
+            android:textColor="@color/primary_text"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:textAllCaps="true"
+            android:letterSpacing="0.1" />
+    </LinearLayout>
+
+    <!-- Night dim overlay -->
+    <View
+        android:id="@+id/nightDimOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:alpha="0"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <!-- Settings hint (bottom-left) -->
+    <TextView
+        android:id="@+id/settingsHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="24dp"
+        android:layout_marginBottom="24dp"
+        android:text="@string/settings_hint"
+        android:textColor="#A07840"
+        android:textSize="12sp"
+        android:fontFamily="monospace"
+        android:alpha="0.5" />
+
+    <!-- Settings overlay (hidden by default) -->
+    <FrameLayout
+        android:id="@+id/settingsOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/settings_overlay"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <include layout="@layout/dialog_settings" />
+    </FrameLayout>
+
+</FrameLayout>
