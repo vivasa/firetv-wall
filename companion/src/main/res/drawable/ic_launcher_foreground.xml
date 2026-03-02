@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- TV outline -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,35 h48 a4,4 0 0,1 4,4 v28 a4,4 0 0,1 -4,4 h-48 a4,4 0 0,1 -4,-4 v-28 a4,4 0 0,1 4,-4 z" />
+
+    <!-- TV screen -->
+    <path
+        android:fillColor="#1A73E8"
+        android:pathData="M33,38 h42 a2,2 0 0,1 2,2 v22 a2,2 0 0,1 -2,2 h-42 a2,2 0 0,1 -2,-2 v-22 a2,2 0 0,1 2,-2 z" />
+
+    <!-- Clock hands on screen -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M54,51 L54,43" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M54,51 L60,51" />
+
+    <!-- TV stand -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,71 L42,76 h24 L64,71" />
+
+    <!-- Phone outline (overlapping bottom-right) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,55 h16 a3,3 0 0,1 3,3 v20 a3,3 0 0,1 -3,3 h-16 a3,3 0 0,1 -3,-3 v-20 a3,3 0 0,1 3,-3 z" />
+
+    <!-- Phone screen -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M64,58 h12 a1,1 0 0,1 1,1 v14 a1,1 0 0,1 -1,1 h-12 a1,1 0 0,1 -1,-1 v-14 a1,1 0 0,1 1,-1 z" />
+
+    <!-- WiFi arc on phone -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000"
+        android:pathData="M67,68 a6,6 0 0,1 6,0" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000"
+        android:pathData="M68.5,66 a3,3 0 0,1 3,0" />
+
+</vector>

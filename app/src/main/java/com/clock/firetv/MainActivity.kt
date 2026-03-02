@@ -33,6 +33,7 @@ import java.util.TimeZone
 class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeListener {
 
     private lateinit var settings: SettingsManager
+    private lateinit var deviceIdentity: DeviceIdentity
 
     // Clock views
     private lateinit var primaryTime: TextView
@@ -59,6 +60,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     private lateinit var wallpaperMgr: WallpaperManager
     private lateinit var chimeMgr: ChimeManager
     private lateinit var youtubeMgr: YouTubePlayerManager
+    private var companionWs: CompanionWebSocket? = null
+    private var nsdRegistration: NsdRegistration? = null
 
     // Settings UI
     private lateinit var settingsItems: List<View>
@@ -140,6 +143,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         )
 
         settings = SettingsManager(this)
+        deviceIdentity = DeviceIdentity(this)
 
         val layoutRes = when (settings.theme) {
             SettingsManager.THEME_GALLERY -> R.layout.activity_main_gallery
@@ -155,6 +159,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         applySettings()
         startEntranceAnimation()
         startCompanionServer()
+        startCompanionWebSocket()
+        startNsdRegistration()
 
         // Start clock updates
         handler.post(clockUpdateRunnable)
@@ -633,6 +639,30 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 valueShowPlayer.text = if (settings.playerVisible) "ON" else "OFF"
             }
         }
+
+        // Broadcast setting change to companion
+        val settingPair: Pair<String, Any>? = when (settingsFocusIndex) {
+            0 -> "theme" to settings.theme
+            1 -> "primaryTimezone" to settings.primaryTimezone
+            2 -> "secondaryTimezone" to settings.secondaryTimezone
+            3 -> "timeFormat" to settings.timeFormat
+            4 -> "chimeEnabled" to settings.chimeEnabled
+            5 -> "wallpaperEnabled" to settings.wallpaperEnabled
+            6 -> "wallpaperInterval" to settings.wallpaperIntervalMinutes
+            7 -> "driftEnabled" to settings.driftEnabled
+            8 -> "nightDimEnabled" to settings.nightDimEnabled
+            9 -> "activePreset" to settings.activePreset
+            10 -> "playerSize" to settings.playerSize
+            11 -> "playerVisible" to settings.playerVisible
+            else -> null
+        }
+        settingPair?.let { (key, value) ->
+            companionWs?.sendEvent(org.json.JSONObject().apply {
+                put("evt", "setting_changed")
+                put("key", key)
+                put("value", value)
+            })
+        }
     }
 
     private fun toggleOrConfirmSetting() {
@@ -785,11 +815,22 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     override fun onTrackChanged(videoTitle: String?, playlistTitle: String?) {
         if (videoTitle == null) {
             nowPlayingLabel.visibility = View.GONE
+            companionWs?.sendEvent(org.json.JSONObject().apply {
+                put("evt", "playback_state")
+                put("playing", false)
+            })
             return
         }
         val text = if (playlistTitle != null) "$videoTitle — $playlistTitle" else videoTitle
         nowPlayingLabel.text = text
         nowPlayingLabel.visibility = if (youtubeContainer.visibility == View.VISIBLE) View.VISIBLE else View.GONE
+
+        // Broadcast to companion
+        companionWs?.sendEvent(org.json.JSONObject().apply {
+            put("evt", "track_changed")
+            put("title", videoTitle)
+            put("playlist", playlistTitle ?: "")
+        })
     }
 
     // ---- Preset Helpers ----
@@ -833,6 +874,222 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         }
     }
 
+    private fun startCompanionWebSocket() {
+        val ws = CompanionWebSocket(settings, deviceIdentity, 8765)
+        ws.listener = object : CompanionWebSocket.Listener {
+            override fun onCompanionConnected() {
+                showLinkIndicator()
+            }
+            override fun onCompanionDisconnected() {
+                hideLinkIndicator()
+            }
+            override fun onShowPin(pin: String) {
+                showPinOverlay(pin)
+            }
+            override fun onDismissPin() {
+                dismissPinOverlay()
+            }
+            override fun onPlayPreset(index: Int) {
+                settings.activePreset = index
+                valueActivePreset.text = getPresetDisplayLabel(index)
+                applyPlayerSettings()
+            }
+            override fun onStopPlayback() {
+                settings.activePreset = -1
+                valueActivePreset.text = getPresetDisplayLabel(-1)
+                applyPlayerSettings()
+            }
+            override fun onSeek(offsetSec: Int) {
+                if (offsetSec > 0) youtubeMgr.seekForward() else youtubeMgr.seekBackward()
+            }
+            override fun onSkip(direction: Int) {
+                if (direction > 0) youtubeMgr.playNext() else youtubeMgr.playPrevious()
+            }
+            override fun onSettingChanged(key: String, value: Any) {
+                applyRemoteSetting(key, value)
+            }
+            override fun onSyncPresets(presets: org.json.JSONArray) {
+                for (i in 0 until presets.length()) {
+                    val p = presets.getJSONObject(i)
+                    val idx = p.getInt("index")
+                    if (idx in 0 until SettingsManager.PRESET_COUNT) {
+                        settings.setPresetUrl(idx, p.optString("url", ""))
+                        settings.setPresetName(idx, p.optString("name", "Preset ${idx + 1}"))
+                    }
+                }
+                valueActivePreset.text = getPresetDisplayLabel(settings.activePreset)
+            }
+        }
+        try {
+            ws.startServer()
+            Thread.sleep(200) // NanoHTTPD binds on background thread
+            if (ws.isAlive) {
+                companionWs = ws
+                android.util.Log.e("CompanionWS", "WebSocket server started on port ${ws.actualPort}")
+            } else {
+                ws.stop()
+                android.util.Log.e("CompanionWS", "Port 8765 bind failed, trying 8766")
+                val fallback = CompanionWebSocket(settings, deviceIdentity, 8766)
+                fallback.listener = ws.listener
+                fallback.startServer()
+                Thread.sleep(200)
+                if (fallback.isAlive) {
+                    companionWs = fallback
+                    android.util.Log.e("CompanionWS", "WebSocket server started on fallback port ${fallback.actualPort}")
+                } else {
+                    fallback.stop()
+                    android.util.Log.e("CompanionWS", "WebSocket server failed to start on both ports")
+                }
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("CompanionWS", "WebSocket server startup error", e)
+        }
+    }
+
+    private fun applyRemoteSetting(key: String, value: Any) {
+        when (key) {
+            "theme" -> {
+                val v = (value as? Number)?.toInt() ?: return
+                settings.theme = v
+                recreate()
+            }
+            "primaryTimezone" -> {
+                settings.primaryTimezone = value.toString()
+            }
+            "secondaryTimezone" -> {
+                settings.secondaryTimezone = value.toString()
+            }
+            "timeFormat" -> {
+                settings.timeFormat = (value as? Number)?.toInt() ?: return
+            }
+            "chimeEnabled" -> {
+                settings.chimeEnabled = value as? Boolean ?: return
+                applyNonPlayerSettings()
+            }
+            "wallpaperEnabled" -> {
+                settings.wallpaperEnabled = value as? Boolean ?: return
+                applyNonPlayerSettings()
+            }
+            "wallpaperInterval" -> {
+                settings.wallpaperIntervalMinutes = (value as? Number)?.toInt() ?: return
+                wallpaperMgr.updateInterval(settings.wallpaperIntervalMinutes)
+            }
+            "driftEnabled" -> {
+                settings.driftEnabled = value as? Boolean ?: return
+                applyNonPlayerSettings()
+            }
+            "nightDimEnabled" -> {
+                settings.nightDimEnabled = value as? Boolean ?: return
+            }
+            "activePreset" -> {
+                val idx = (value as? Number)?.toInt() ?: return
+                settings.activePreset = idx
+                valueActivePreset.text = getPresetDisplayLabel(idx)
+                applyPlayerSettings()
+            }
+            "playerSize" -> {
+                val sz = (value as? Number)?.toInt() ?: return
+                settings.playerSize = sz
+                val dims = settings.getPlayerDimensions()
+                youtubeMgr.updateSize(dims.first, dims.second)
+            }
+            "playerVisible" -> {
+                settings.playerVisible = value as? Boolean ?: return
+                applyPlayerSettings()
+            }
+        }
+        // Broadcast the change back to the phone
+        companionWs?.sendEvent(org.json.JSONObject().apply {
+            put("evt", "setting_changed")
+            put("key", key)
+            put("value", value)
+        })
+    }
+
+    // ---- PIN Overlay ----
+
+    private fun showPinOverlay(pin: String) {
+        // Create a simple centered overlay with the PIN
+        val rootLayout = findViewById<FrameLayout>(R.id.rootLayout)
+        val existing = rootLayout.findViewWithTag<View>("pinOverlay")
+        existing?.let { rootLayout.removeView(it) }
+
+        val overlay = FrameLayout(this).apply {
+            tag = "pinOverlay"
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(0xCC000000.toInt())
+            alpha = 0f
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER
+            )
+        }
+
+        val pinText = TextView(this).apply {
+            text = pin
+            textSize = 64f
+            setTextColor(0xFFE8A850.toInt())
+            typeface = android.graphics.Typeface.MONOSPACE
+            gravity = android.view.Gravity.CENTER
+            letterSpacing = 0.3f
+        }
+
+        val instrText = TextView(this).apply {
+            text = "Enter this code on your phone"
+            textSize = 16f
+            setTextColor(0xAAFFFFFF.toInt())
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 24, 0, 0)
+        }
+
+        container.addView(pinText)
+        container.addView(instrText)
+        overlay.addView(container)
+        rootLayout.addView(overlay)
+        overlay.animate().alpha(1f).setDuration(300).start()
+    }
+
+    private fun dismissPinOverlay() {
+        val rootLayout = findViewById<FrameLayout>(R.id.rootLayout)
+        val overlay = rootLayout.findViewWithTag<View>("pinOverlay") ?: return
+        overlay.animate().alpha(0f).setDuration(300).withEndAction {
+            rootLayout.removeView(overlay)
+        }.start()
+    }
+
+    // ---- Link Indicator ----
+
+    private fun showLinkIndicator() {
+        val indicator = findViewById<LinearLayout>(R.id.linkIndicator) ?: return
+        indicator.visibility = View.VISIBLE
+        indicator.animate().alpha(1f).setDuration(300).start()
+    }
+
+    private fun hideLinkIndicator() {
+        val indicator = findViewById<LinearLayout>(R.id.linkIndicator) ?: return
+        handler.postDelayed({
+            indicator.animate().alpha(0f).setDuration(300).withEndAction {
+                indicator.visibility = View.GONE
+            }.start()
+        }, 3000)
+    }
+
+    private fun startNsdRegistration() {
+        val ws = companionWs ?: return
+        val nsd = NsdRegistration(this, deviceIdentity)
+        nsd.register(ws.actualPort)
+        nsdRegistration = nsd
+    }
+
     private fun getDeviceIpAddress(): String? {
         return try {
             val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as? WifiManager ?: return null
@@ -871,7 +1128,9 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
     override fun onDestroy() {
         super.onDestroy()
+        nsdRegistration?.unregister()
         companionServer?.stop()
+        companionWs?.stop()
         handler.removeCallbacksAndMessages(null)
         dimAnimHandler.removeCallbacksAndMessages(null)
         transportAutoHideHandler.removeCallbacksAndMessages(null)

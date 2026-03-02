@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 
 class SettingsManager(context: Context) {
 
-    private val prefs: SharedPreferences =
+    internal val prefs: SharedPreferences =
         context.getSharedPreferences("firetv_clock_prefs", Context.MODE_PRIVATE)
 
     companion object {
