@@ -33,11 +33,20 @@ class YouTubePlayerManager(
         private val BARE_VIDEO_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{11}$")
     }
 
+    interface OnTrackChangeListener {
+        fun onTrackChanged(videoTitle: String?, playlistTitle: String?)
+    }
+
+    var trackChangeListener: OnTrackChangeListener? = null
+
     private var player: ExoPlayer? = null
     private val streamResolver = StreamResolver()
 
     // Playlist state
     private var playlistVideoUrls: List<String> = emptyList()
+    private var playlistVideoTitles: List<String?> = emptyList()
+    private var currentPlaylistTitle: String? = null
+    private var currentVideoTitle: String? = null
     private var currentIndex = 0
     private var currentVideoUrl: String? = null
     private var currentLoadJob: Job? = null
@@ -94,6 +103,8 @@ class YouTubePlayerManager(
 
     private suspend fun loadSingleVideo(videoId: String) {
         playlistVideoUrls = emptyList()
+        playlistVideoTitles = emptyList()
+        currentPlaylistTitle = null
         currentIndex = 0
         val videoUrl = "https://www.youtube.com/watch?v=$videoId"
         currentVideoUrl = videoUrl
@@ -102,35 +113,39 @@ class YouTubePlayerManager(
 
     private suspend fun loadPlaylist(playlistId: String) {
         val playlistUrl = "https://www.youtube.com/playlist?list=$playlistId"
-        val items = streamResolver.extractPlaylistItems(playlistUrl)
-        if (items.isEmpty()) {
+        val result = streamResolver.extractPlaylistItems(playlistUrl)
+        if (result.items.isEmpty()) {
             Log.w(TAG, "Playlist is empty or failed to extract: $playlistId")
             return
         }
-        playlistVideoUrls = items
+        currentPlaylistTitle = result.title
+        playlistVideoUrls = result.items.map { it.url }
+        playlistVideoTitles = result.items.map { it.title }
         currentIndex = 0
-        currentVideoUrl = items[0]
-        resolveAndPlay(items[0])
+        currentVideoUrl = playlistVideoUrls[0]
+        resolveAndPlay(playlistVideoUrls[0])
     }
 
     private suspend fun loadPlaylistStartingAtVideo(playlistId: String, videoId: String) {
         val playlistUrl = "https://www.youtube.com/playlist?list=$playlistId"
-        val items = streamResolver.extractPlaylistItems(playlistUrl)
-        if (items.isEmpty()) {
+        val result = streamResolver.extractPlaylistItems(playlistUrl)
+        if (result.items.isEmpty()) {
             // Fallback to single video
             loadSingleVideo(videoId)
             return
         }
-        playlistVideoUrls = items
-        val idx = items.indexOfFirst { it.contains(videoId) }
+        currentPlaylistTitle = result.title
+        playlistVideoUrls = result.items.map { it.url }
+        playlistVideoTitles = result.items.map { it.title }
+        val idx = playlistVideoUrls.indexOfFirst { it.contains(videoId) }
         currentIndex = if (idx >= 0) idx else 0
-        currentVideoUrl = items[currentIndex]
-        resolveAndPlay(items[currentIndex])
+        currentVideoUrl = playlistVideoUrls[currentIndex]
+        resolveAndPlay(playlistVideoUrls[currentIndex])
     }
 
     private suspend fun resolveAndPlay(videoUrl: String) {
-        val streamUrl = streamResolver.resolveStreamUrl(videoUrl)
-        if (streamUrl == null) {
+        val result = streamResolver.resolveStreamUrl(videoUrl)
+        if (result == null) {
             Log.w(TAG, "Failed to resolve stream for $videoUrl")
             // Skip to next if in playlist
             if (playlistVideoUrls.isNotEmpty()) {
@@ -138,12 +153,17 @@ class YouTubePlayerManager(
             }
             return
         }
+        // Use title from stream resolution; fall back to stored playlist title for current index
+        val videoTitle = result.title
+            ?: playlistVideoTitles.getOrNull(currentIndex)
+        currentVideoTitle = videoTitle
         withContext(Dispatchers.Main) {
             player?.let { exo ->
-                exo.setMediaItem(MediaItem.fromUri(streamUrl))
+                exo.setMediaItem(MediaItem.fromUri(result.url))
                 exo.prepare()
                 exo.play()
             }
+            trackChangeListener?.onTrackChanged(currentVideoTitle, currentPlaylistTitle)
         }
     }
 
@@ -169,11 +189,11 @@ class YouTubePlayerManager(
             // Likely expired stream URL (HTTP 403) — re-resolve
             currentLoadJob?.cancel()
             currentLoadJob = scope.launch {
-                val freshUrl = streamResolver.resolveStreamUrl(videoUrl)
-                if (freshUrl != null) {
+                val freshResult = streamResolver.resolveStreamUrl(videoUrl)
+                if (freshResult != null) {
                     withContext(Dispatchers.Main) {
                         player?.let { exo ->
-                            exo.setMediaItem(MediaItem.fromUri(freshUrl))
+                            exo.setMediaItem(MediaItem.fromUri(freshResult.url))
                             exo.prepare()
                             exo.play()
                         }
@@ -242,8 +262,12 @@ class YouTubePlayerManager(
         player?.stop()
         player?.clearMediaItems()
         playlistVideoUrls = emptyList()
+        playlistVideoTitles = emptyList()
+        currentPlaylistTitle = null
+        currentVideoTitle = null
         currentIndex = 0
         currentVideoUrl = null
+        trackChangeListener?.onTrackChanged(null, null)
     }
 
     fun destroy() {

@@ -1,6 +1,7 @@
 package com.clock.firetv
 
 import android.graphics.Outline
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -8,13 +9,14 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.ui.PlayerView
+import coil.load
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,7 +30,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeListener {
 
     private lateinit var settings: SettingsManager
 
@@ -64,9 +66,15 @@ class MainActivity : AppCompatActivity() {
     private var settingsVisible = false
 
     // Settings snapshot for detecting player-relevant changes
-    private var snapshotYoutubeUrl = ""
+    private var snapshotActivePreset = -1
     private var snapshotPlayerVisible = false
     private var snapshotPlayerSize = 0
+
+    // Now-playing label
+    private lateinit var nowPlayingLabel: TextView
+
+    // Companion server
+    private var companionServer: CompanionServer? = null
 
     // Transport controls
     private lateinit var transportControls: LinearLayout
@@ -85,9 +93,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var valueWallpaperInterval: TextView
     private lateinit var valueDrift: TextView
     private lateinit var valueNightDim: TextView
-    private lateinit var valueYoutubeUrl: EditText
+    private lateinit var valueActivePreset: TextView
     private lateinit var valuePlayerSize: TextView
     private lateinit var valueShowPlayer: TextView
+    private lateinit var qrCodeImage: ImageView
+    private lateinit var companionUrlText: TextView
 
     private val handler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -130,12 +140,14 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         settings = SettingsManager(this)
+        settings.migrateFromSingleUrl()
         loadResourceArrays()
         bindViews()
         initManagers()
         loadSettingsToUI()
         applySettings()
         startEntranceAnimation()
+        startCompanionServer()
 
         // Start clock updates
         handler.post(clockUpdateRunnable)
@@ -170,6 +182,9 @@ class MainActivity : AppCompatActivity() {
         chimeIndicator = findViewById(R.id.chimeIndicator)
         chimeDot = findViewById(R.id.chimeDot)
 
+        // Now-playing label
+        nowPlayingLabel = findViewById(R.id.nowPlayingLabel)
+
         // Settings value views
         valuePrimaryTz = findViewById(R.id.valuePrimaryTz)
         valueSecondaryTz = findViewById(R.id.valueSecondaryTz)
@@ -179,9 +194,11 @@ class MainActivity : AppCompatActivity() {
         valueWallpaperInterval = findViewById(R.id.valueWallpaperInterval)
         valueDrift = findViewById(R.id.valueDrift)
         valueNightDim = findViewById(R.id.valueNightDim)
-        valueYoutubeUrl = findViewById(R.id.valueYoutubeUrl)
+        valueActivePreset = findViewById(R.id.valueActivePreset)
         valuePlayerSize = findViewById(R.id.valuePlayerSize)
         valueShowPlayer = findViewById(R.id.valueShowPlayer)
+        qrCodeImage = findViewById(R.id.qrCodeImage)
+        companionUrlText = findViewById(R.id.companionUrlText)
 
         // Transport controls
         transportControls = findViewById(R.id.transportControls)
@@ -202,7 +219,7 @@ class MainActivity : AppCompatActivity() {
             findViewById(R.id.settingWallpaperInterval),
             findViewById(R.id.settingDrift),
             findViewById(R.id.settingNightDim),
-            findViewById(R.id.settingYoutubeUrl),
+            findViewById(R.id.settingActivePreset),
             findViewById(R.id.settingPlayerSize),
             findViewById(R.id.settingShowPlayer)
         )
@@ -220,6 +237,7 @@ class MainActivity : AppCompatActivity() {
         wallpaperMgr = WallpaperManager(wallpaperFront, wallpaperBack, scope)
         chimeMgr = ChimeManager(chimeIndicator, chimeDot)
         youtubeMgr = YouTubePlayerManager(this, playerView, youtubeContainer, scope)
+        youtubeMgr.trackChangeListener = this
         youtubeMgr.initialize()
 
         // Clip video content to rounded corners
@@ -256,11 +274,13 @@ class MainActivity : AppCompatActivity() {
         val dims = settings.getPlayerDimensions()
         youtubeMgr.updateSize(dims.first, dims.second)
 
-        if (settings.playerVisible && settings.youtubeUrl.isNotBlank()) {
+        val url = settings.activeYoutubeUrl
+        if (settings.playerVisible && url.isNotBlank()) {
             youtubeContainer.visibility = View.VISIBLE
-            youtubeMgr.loadVideo(settings.youtubeUrl)
+            youtubeMgr.loadVideo(url)
         } else {
             youtubeContainer.visibility = View.GONE
+            nowPlayingLabel.visibility = View.GONE
             youtubeMgr.stop()
         }
     }
@@ -428,7 +448,7 @@ class MainActivity : AppCompatActivity() {
         settingsFocusIndex = 0
 
         // Snapshot player-relevant settings before opening
-        snapshotYoutubeUrl = settings.youtubeUrl
+        snapshotActivePreset = settings.activePreset
         snapshotPlayerVisible = settings.playerVisible
         snapshotPlayerSize = settings.playerSize
 
@@ -436,16 +456,11 @@ class MainActivity : AppCompatActivity() {
         settingsOverlay.alpha = 0f
         settingsOverlay.animate().alpha(1f).setDuration(300).start()
         updateSettingsFocus()
+        loadQrCode()
     }
 
     private fun hideSettings() {
         settingsVisible = false
-
-        // Save YouTube URL from EditText
-        val newUrl = valueYoutubeUrl.text.toString().trim()
-        if (newUrl != settings.youtubeUrl) {
-            settings.youtubeUrl = newUrl
-        }
 
         settingsOverlay.animate()
             .alpha(0f)
@@ -459,11 +474,11 @@ class MainActivity : AppCompatActivity() {
         applyNonPlayerSettings()
 
         // Only reload player if player-relevant settings changed
-        val urlChanged = settings.youtubeUrl != snapshotYoutubeUrl
+        val presetChanged = settings.activePreset != snapshotActivePreset
         val visibilityChanged = settings.playerVisible != snapshotPlayerVisible
         val sizeChanged = settings.playerSize != snapshotPlayerSize
 
-        if (urlChanged || visibilityChanged) {
+        if (presetChanged || visibilityChanged) {
             applyPlayerSettings()
         } else if (sizeChanged) {
             val dims = settings.getPlayerDimensions()
@@ -568,8 +583,16 @@ class MainActivity : AppCompatActivity() {
                 settings.nightDimEnabled = !settings.nightDimEnabled
                 valueNightDim.text = if (settings.nightDimEnabled) "ON" else "OFF"
             }
-            8 -> { // YouTube URL — focus the EditText for keyboard input
-                valueYoutubeUrl.requestFocus()
+            8 -> { // Active preset — cycle through None, Preset 1–4
+                val current = settings.activePreset
+                // Options: -1 (None), 0, 1, 2, 3
+                val newPreset = if (direction > 0) {
+                    if (current >= 3) -1 else current + 1
+                } else {
+                    if (current < 0) 3 else current - 1
+                }
+                settings.activePreset = newPreset
+                valueActivePreset.text = getPresetDisplayLabel(newPreset)
             }
             9 -> { // Player size
                 val newSize = (settings.playerSize + direction).coerceIn(0, 2)
@@ -591,7 +614,7 @@ class MainActivity : AppCompatActivity() {
             4 -> adjustSettingValue(0) // Wallpaper toggle
             6 -> adjustSettingValue(0) // Drift toggle
             7 -> adjustSettingValue(0) // Night dim toggle
-            8 -> valueYoutubeUrl.requestFocus() // Focus URL input
+            8 -> adjustSettingValue(1) // Cycle preset forward
             10 -> adjustSettingValue(0) // Show player toggle
             else -> adjustSettingValue(1) // Cycle forward for dropdowns
         }
@@ -700,7 +723,7 @@ class MainActivity : AppCompatActivity() {
 
         valueDrift.text = if (settings.driftEnabled) "ON" else "OFF"
         valueNightDim.text = if (settings.nightDimEnabled) "ON" else "OFF"
-        valueYoutubeUrl.setText(settings.youtubeUrl)
+        valueActivePreset.text = getPresetDisplayLabel(settings.activePreset)
         valuePlayerSize.text = playerSizeOptions[settings.playerSize.coerceIn(0, 2)]
         valueShowPlayer.text = if (settings.playerVisible) "ON" else "OFF"
     }
@@ -727,6 +750,83 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
+    // ---- Track Change Listener ----
+
+    override fun onTrackChanged(videoTitle: String?, playlistTitle: String?) {
+        if (videoTitle == null) {
+            nowPlayingLabel.visibility = View.GONE
+            return
+        }
+        val text = if (playlistTitle != null) "$videoTitle — $playlistTitle" else videoTitle
+        nowPlayingLabel.text = text
+        nowPlayingLabel.visibility = if (youtubeContainer.visibility == View.VISIBLE) View.VISIBLE else View.GONE
+    }
+
+    // ---- Preset Helpers ----
+
+    private fun getPresetDisplayLabel(index: Int): String {
+        if (index < 0 || index >= SettingsManager.PRESET_COUNT) return "None"
+        val name = settings.getPresetName(index)
+        val defaultName = "Preset ${index + 1}"
+        return if (name != defaultName && name.isNotBlank()) {
+            "${index + 1}: $name"
+        } else {
+            defaultName
+        }
+    }
+
+    // ---- Companion Server ----
+
+    private fun startCompanionServer() {
+        val server = CompanionServer(settings, 8080)
+        server.presetChangeListener = object : CompanionServer.OnPresetChangeListener {
+            override fun onActivePresetChanged() {
+                handler.post {
+                    valueActivePreset.text = getPresetDisplayLabel(settings.activePreset)
+                    applyPlayerSettings()
+                }
+            }
+        }
+        try {
+            server.start()
+            companionServer = server
+        } catch (e: Exception) {
+            // Port 8080 failed, try 8081
+            try {
+                val fallback = CompanionServer(settings, 8081)
+                fallback.presetChangeListener = server.presetChangeListener
+                fallback.start()
+                companionServer = fallback
+            } catch (e2: Exception) {
+                android.util.Log.e("MainActivity", "Failed to start companion server", e2)
+            }
+        }
+    }
+
+    private fun getDeviceIpAddress(): String? {
+        return try {
+            val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as? WifiManager ?: return null
+            @Suppress("DEPRECATION")
+            val ip = wifiManager.connectionInfo.ipAddress
+            if (ip == 0) return null
+            "${ip and 0xFF}.${ip shr 8 and 0xFF}.${ip shr 16 and 0xFF}.${ip shr 24 and 0xFF}"
+        } catch (e: SecurityException) {
+            android.util.Log.w("MainActivity", "Cannot get WiFi IP: missing permission", e)
+            null
+        }
+    }
+
+    private fun loadQrCode() {
+        val server = companionServer ?: return
+        val ip = getDeviceIpAddress() ?: return
+        val url = "http://$ip:${server.actualPort}"
+        companionUrlText.text = url
+        val qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${java.net.URLEncoder.encode(url, "UTF-8")}"
+        qrCodeImage.load(qrApiUrl) {
+            crossfade(true)
+        }
+    }
+
     // ---- Lifecycle ----
 
     override fun onResume() {
@@ -741,6 +841,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        companionServer?.stop()
         handler.removeCallbacksAndMessages(null)
         dimAnimHandler.removeCallbacksAndMessages(null)
         transportAutoHideHandler.removeCallbacksAndMessages(null)

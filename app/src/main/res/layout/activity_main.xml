@@ -318,6 +318,23 @@
         </LinearLayout>
     </FrameLayout>
 
+    <!-- Now playing label (below player) -->
+    <TextView
+        android:id="@+id/nowPlayingLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="250dp"
+        android:layout_marginEnd="32dp"
+        android:background="@drawable/now_playing_pill_bg"
+        android:ellipsize="end"
+        android:fontFamily="monospace"
+        android:maxWidth="380dp"
+        android:singleLine="true"
+        android:textColor="#F0EEE6"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <!-- Chime indicator (top-right) -->
     <LinearLayout
         android:id="@+id/chimeIndicator"

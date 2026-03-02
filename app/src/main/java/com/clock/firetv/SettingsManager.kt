@@ -20,6 +20,10 @@ class SettingsManager(context: Context) {
         private const val KEY_YOUTUBE_URL = "youtube_url"
         private const val KEY_PLAYER_SIZE = "player_size"
         private const val KEY_PLAYER_VISIBLE = "player_visible"
+        private const val KEY_PRESET_URL_PREFIX = "preset_url_"
+        private const val KEY_PRESET_NAME_PREFIX = "preset_name_"
+        private const val KEY_ACTIVE_PRESET = "active_preset"
+        private const val KEY_PRESETS_MIGRATED = "presets_migrated"
 
         const val FORMAT_12H = 0
         const val FORMAT_24H = 1
@@ -27,6 +31,8 @@ class SettingsManager(context: Context) {
         const val PLAYER_SMALL = 0
         const val PLAYER_MEDIUM = 1
         const val PLAYER_LARGE = 2
+
+        const val PRESET_COUNT = 4
     }
 
     var primaryTimezone: String
@@ -72,6 +78,41 @@ class SettingsManager(context: Context) {
     var playerVisible: Boolean
         get() = prefs.getBoolean(KEY_PLAYER_VISIBLE, true)
         set(value) = prefs.edit().putBoolean(KEY_PLAYER_VISIBLE, value).apply()
+
+    // Preset management
+    var activePreset: Int
+        get() = prefs.getInt(KEY_ACTIVE_PRESET, -1)
+        set(value) = prefs.edit().putInt(KEY_ACTIVE_PRESET, value).apply()
+
+    fun getPresetUrl(index: Int): String =
+        prefs.getString("${KEY_PRESET_URL_PREFIX}$index", "") ?: ""
+
+    fun setPresetUrl(index: Int, url: String) =
+        prefs.edit().putString("${KEY_PRESET_URL_PREFIX}$index", url).apply()
+
+    fun getPresetName(index: Int): String =
+        prefs.getString("${KEY_PRESET_NAME_PREFIX}$index", "Preset ${index + 1}") ?: "Preset ${index + 1}"
+
+    fun setPresetName(index: Int, name: String) =
+        prefs.edit().putString("${KEY_PRESET_NAME_PREFIX}$index", name).apply()
+
+    val activeYoutubeUrl: String
+        get() {
+            val idx = activePreset
+            if (idx < 0 || idx >= PRESET_COUNT) return ""
+            return getPresetUrl(idx)
+        }
+
+    fun migrateFromSingleUrl() {
+        if (prefs.getBoolean(KEY_PRESETS_MIGRATED, false)) return
+        val oldUrl = prefs.getString(KEY_YOUTUBE_URL, "") ?: ""
+        if (oldUrl.isNotBlank()) {
+            setPresetUrl(0, oldUrl)
+            activePreset = 0
+            prefs.edit().remove(KEY_YOUTUBE_URL).apply()
+        }
+        prefs.edit().putBoolean(KEY_PRESETS_MIGRATED, true).apply()
+    }
 
     fun getPlayerDimensions(): Pair<Int, Int> = when (playerSize) {
         PLAYER_SMALL -> 240 to 135

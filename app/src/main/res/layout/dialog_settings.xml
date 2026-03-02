@@ -299,13 +299,14 @@
                 android:fontFamily="monospace" />
         </LinearLayout>
 
-        <!-- 9. YouTube URL -->
+        <!-- 9. Active Preset -->
         <LinearLayout
-            android:id="@+id/settingYoutubeUrl"
+            android:id="@+id/settingActivePreset"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/settings_item_bg"
-            android:orientation="vertical"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:paddingTop="14dp"
@@ -315,28 +316,21 @@
             android:focusableInTouchMode="true">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="@string/label_youtube_url"
+                android:layout_weight="1"
+                android:text="Active Playlist"
                 android:textColor="@color/primary_text"
                 android:textSize="14sp" />
 
-            <EditText
-                android:id="@+id/valueYoutubeUrl"
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/valueActivePreset"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@color/transparent"
-                android:hint="@string/hint_youtube_url"
+                android:text="None"
                 android:textColor="@color/accent"
-                android:textColorHint="@color/secondary_text"
                 android:textSize="13sp"
-                android:fontFamily="monospace"
-                android:inputType="textUri"
-                android:singleLine="true"
-                android:imeOptions="actionDone"
-                android:focusable="true"
-                android:focusableInTouchMode="true" />
+                android:fontFamily="monospace" />
         </LinearLayout>
 
         <!-- 10. Player Size -->
@@ -404,6 +398,47 @@
                 android:textColor="@color/accent"
                 android:textSize="13sp"
                 android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <!-- QR Code / Companion URL -->
+        <LinearLayout
+            android:id="@+id/settingCompanionUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/settings_item_bg"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:layout_marginTop="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Configure from your phone"
+                android:textColor="@color/primary_text"
+                android:textSize="14sp"
+                android:layout_marginBottom="12dp" />
+
+            <ImageView
+                android:id="@+id/qrCodeImage"
+                android:layout_width="150dp"
+                android:layout_height="150dp"
+                android:layout_gravity="center_horizontal"
+                android:background="#FFFFFFFF"
+                android:padding="4dp"
+                android:scaleType="fitCenter" />
+
+            <TextView
+                android:id="@+id/companionUrlText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="monospace"
+                android:textColor="@color/accent"
+                android:textSize="13sp" />
         </LinearLayout>
 
     </LinearLayout>
