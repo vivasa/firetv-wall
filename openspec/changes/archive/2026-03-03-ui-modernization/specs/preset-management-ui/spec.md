@@ -13,6 +13,21 @@ The companion app SHALL display presets from the phone's local config store. Eac
 - **THEN** its card has `#282828` background with a 4dp `#E8A44A` accent bar on the left edge
 - **AND** all other preset cards have `#1E1E1E` background with no accent bar
 
+### Requirement: Empty state
+The Music tab SHALL display a centered empty state when no presets exist. The primary text "No playlists yet" SHALL use `TextAppearance.Mantle.Heading` in `mantle_on_surface_muted`. The secondary text "Tap + to add your first playlist" SHALL use `TextAppearance.Mantle.Caption` in `mantle_on_surface_muted` at alpha 0.7.
+
+#### Scenario: Empty preset list
+- **WHEN** the Music tab is shown with zero presets
+- **THEN** the empty state is displayed centered vertically with "No playlists yet" in 16sp and "Tap + to add your first playlist" in 13sp below it
+- **AND** the FAB is visible at the bottom-right
+
+### Requirement: Floating action button styling
+The FAB for adding presets SHALL use `mantle_accent` (`#E8A44A`) as its background color and `mantle_on_accent` (`#1A1A1A`) as its icon tint.
+
+#### Scenario: FAB appearance
+- **WHEN** the Music tab is rendered
+- **THEN** the FAB has `#E8A44A` background with a `#1A1A1A` plus icon
+
 ### Requirement: Activate preset
 The companion app SHALL allow the user to tap a play button on a preset to start playing it. If connected to a TV, this sends a `play` command. The active preset is always tracked in the local config store. The play button icon SHALL use `mantle_accent` tint on the active preset and `mantle_on_surface_muted` on inactive presets.
 
@@ -29,34 +44,9 @@ The companion app SHALL NOT update its preset list from TV-side events. Presets 
 - **THEN** the Now Playing display on the TV tab updates
 - **AND** the preset list on the Music tab does NOT change
 
-### Requirement: Empty state
-The Music tab SHALL display a centered empty state when no presets exist. The primary text "No playlists yet" SHALL use `TextAppearance.Mantle.Heading` in `mantle_on_surface_muted`. The secondary text "Tap + to add your first playlist" SHALL use `TextAppearance.Mantle.Caption` in `mantle_on_surface_muted` at alpha 0.7.
-
-#### Scenario: Empty preset list
-- **WHEN** the Music tab is shown with zero presets
-- **THEN** the empty state is displayed centered vertically with "No playlists yet" in 16sp and "Tap + to add your first playlist" in 13sp below it
-- **AND** the FAB is visible at the bottom-right
-
-### Requirement: Floating action button styling
-The FAB for adding presets SHALL use `mantle_accent` (`#E8A44A`) as its background color and `mantle_on_accent` (`#1A1A1A`) as its icon tint.
-
-#### Scenario: FAB appearance
-- **WHEN** the Music tab is rendered
-- **THEN** the FAB has `#E8A44A` background with a `#1A1A1A` plus icon
-
 ### Requirement: Music tab screen title
 The Music tab SHALL display a screen title "Playlists" at the top using `TextAppearance.Mantle.Title` in `mantle_on_surface` color, with `spacing_lg` (16dp) bottom margin before the preset list begins.
 
 #### Scenario: Screen title displayed
 - **WHEN** the Music tab is rendered with presets
 - **THEN** "Playlists" appears at the top in 22sp medium weight `#F0F0F0`
-
-## REMOVED Requirements
-
-### Requirement: Edit preset
-**Reason**: Replaced by `phone-playlist-editor` capability which provides a full CRUD editor on the Music tab.
-**Migration**: All preset editing (add, edit, delete, reorder) is handled by `phone-playlist-editor`.
-
-### Requirement: Clear preset
-**Reason**: Replaced by delete functionality in `phone-playlist-editor`. With variable-length presets, clearing a slot is replaced by deleting the preset entirely.
-**Migration**: Users delete presets instead of clearing them.

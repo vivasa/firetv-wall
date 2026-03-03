@@ -1,52 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/Mantle.Card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:padding="12dp"
-    android:background="?attr/selectableItemBackground">
-
-    <TextView
-        android:id="@+id/presetIndex"
-        android:layout_width="28dp"
-        android:layout_height="wrap_content"
-        android:textSize="14sp"
-        android:alpha="0.5"
-        android:gravity="center" />
+    android:layout_marginBottom="@dimen/spacing_sm">
 
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp">
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
         <TextView
-            android:id="@+id/presetName"
-            android:layout_width="match_parent"
+            android:id="@+id/presetIndex"
+            android:layout_width="28dp"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:textAppearance="@style/TextAppearance.Mantle.Caption"
+            android:gravity="center" />
 
-        <TextView
-            android:id="@+id/presetUrl"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:alpha="0.5"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:layout_marginEnd="@dimen/spacing_sm">
+
+            <TextView
+                android:id="@+id/presetName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.Mantle.Body"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/presetUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.Mantle.Caption"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPlay"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:contentDescription="Play"
+            android:text="▶" />
+
     </LinearLayout>
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnPlay"
-        style="@style/Widget.Material3.Button.IconButton"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:contentDescription="Play"
-        android:text="▶" />
-
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

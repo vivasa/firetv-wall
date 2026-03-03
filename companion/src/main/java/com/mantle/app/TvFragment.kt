@@ -246,6 +246,8 @@ class TvFragment : Fragment() {
                 text = preset.name.ifEmpty { "Preset ${index + 1}" }
                 isCheckable = true
                 isChecked = index == cfg.player.activePreset
+                chipBackgroundColor = resources.getColorStateList(R.color.chip_bg, requireContext().theme)
+                setTextColor(resources.getColorStateList(R.color.chip_text, requireContext().theme))
                 setOnClickListener {
                     configStore.setActivePreset(index)
                     if (connectionManager.state == TvConnectionManager.ConnectionState.CONNECTED) {

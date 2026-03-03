@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Mantle" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">#1A73E8</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorPrimaryContainer">#D2E3FC</item>
-        <item name="colorOnPrimaryContainer">#041E49</item>
+    <style name="Theme.Mantle.Dark" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:colorBackground">@color/mantle_background</item>
+        <item name="colorSurface">@color/mantle_background</item>
+        <item name="colorSurfaceContainer">@color/mantle_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/mantle_surface_elevated</item>
+        <item name="colorOnSurface">@color/mantle_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/mantle_on_surface_muted</item>
+        <item name="colorPrimary">@color/mantle_accent</item>
+        <item name="colorOnPrimary">@color/mantle_on_accent</item>
+        <item name="colorOutline">@color/mantle_outline</item>
+        <item name="colorError">@color/mantle_error</item>
     </style>
 </resources>

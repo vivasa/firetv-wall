@@ -1,12 +1,13 @@
 package com.mantle.app
 
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 
 class PresetAdapter(
     private val onPlay: (Int) -> Unit,
@@ -39,10 +40,12 @@ class PresetAdapter(
         holder.presetUrl.text = preset.url
         holder.btnPlay.text = if (isActive) "■" else "▶"
 
+        val card = holder.itemView as MaterialCardView
+        val context = holder.itemView.context
         if (isActive) {
-            holder.itemView.setBackgroundColor(0x0D1A73E8.toInt())
+            card.setCardBackgroundColor(ContextCompat.getColor(context, R.color.mantle_surface_elevated))
         } else {
-            holder.itemView.setBackgroundColor(Color.TRANSPARENT)
+            card.setCardBackgroundColor(ContextCompat.getColor(context, R.color.mantle_surface))
         }
 
         holder.btnPlay.setOnClickListener { onPlay(position) }

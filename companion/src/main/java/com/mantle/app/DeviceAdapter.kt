@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 
@@ -38,13 +39,14 @@ class DeviceAdapter(
         val item = items[position]
         holder.name.text = item.deviceName
         holder.address.text = "${item.host}:${item.port}"
+        val context = holder.itemView.context
         if (item.isPaired) {
             holder.badge.text = "Paired"
-            holder.badge.setTextColor(0xFF4CAF50.toInt())
+            holder.badge.setTextColor(ContextCompat.getColor(context, R.color.connected_green))
             holder.action.text = "Connect"
         } else {
             holder.badge.text = "New"
-            holder.badge.setTextColor(0xFF888888.toInt())
+            holder.badge.setTextColor(ContextCompat.getColor(context, R.color.mantle_on_surface_muted))
             holder.action.text = "Pair"
         }
         holder.action.setOnClickListener { onAction(item) }

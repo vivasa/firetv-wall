@@ -1,5 +1,18 @@
 ## MODIFIED Requirements
 
+### Requirement: Connection status display
+The TV tab SHALL show the current connection status inside a card using `Mantle.Card` style. The connected state SHALL show the device name with a green dot (`connected_green` / `#66BB6A`). The disconnected state SHALL show "Disconnected" with the reconnect button styled using `mantle_accent` as the text color. The connection status text SHALL use `TextAppearance.Mantle.Heading`.
+
+#### Scenario: Connected state
+- **WHEN** connected to a TV named "Living Room Clock"
+- **THEN** the connection card shows "Living Room Clock" with a `#66BB6A` green dot
+- **AND** the reconnect button is hidden
+
+#### Scenario: Disconnected state
+- **WHEN** the WebSocket connection drops
+- **THEN** the connection card shows "Disconnected" with a "Reconnect" button in `#E8A44A`
+- **AND** playback controls are disabled
+
 ### Requirement: Now playing display
 The TV tab SHALL display the currently playing track title and playlist name inside a prominent card using `Mantle.Card` style with `mantle_surface_elevated` (`#282828`) background to distinguish it from standard cards. The track title SHALL use `TextAppearance.Mantle.Title`. The playlist name SHALL use `TextAppearance.Mantle.Caption` in `mantle_on_surface_muted` color. When nothing is playing, the card SHALL show "Not playing" in `mantle_on_surface_muted`.
 
@@ -47,19 +60,6 @@ The TV tab SHALL show preset chips below the now-playing card. Chips SHALL use `
 - **WHEN** preset "Lo-Fi Beats" is currently playing
 - **THEN** the "Lo-Fi Beats" chip has `#E8A44A` background with `#1A1A1A` text
 - **AND** other preset chips have `#282828` background with `#F0F0F0` text
-
-### Requirement: Connection status display
-The TV tab SHALL show the current connection status inside a card using `Mantle.Card` style. The connected state SHALL show the device name with a green dot (`connected_green` / `#66BB6A`). The disconnected state SHALL show "Disconnected" with the reconnect button styled using `mantle_accent` as the text color. The connection status text SHALL use `TextAppearance.Mantle.Heading`.
-
-#### Scenario: Connected state
-- **WHEN** connected to a TV named "Living Room Clock"
-- **THEN** the connection card shows "Living Room Clock" with a `#66BB6A` green dot
-- **AND** the reconnect button is hidden
-
-#### Scenario: Disconnected state
-- **WHEN** the WebSocket connection drops
-- **THEN** the connection card shows "Disconnected" with a "Reconnect" button in `#E8A44A`
-- **AND** playback controls are disabled
 
 ### Requirement: TV discovery and pairing
 The TV tab SHALL provide device discovery (via NSD) and pairing (via PIN) in a devices section below the preset chips. The section header "Devices" SHALL use `TextAppearance.Mantle.Heading`. Device list items SHALL use `Mantle.Card` style. The empty state SHALL show "No Fire TV devices found" in `mantle_on_surface_muted` with a centered layout. The "Enter IP manually" button SHALL use `mantle_accent` text color.

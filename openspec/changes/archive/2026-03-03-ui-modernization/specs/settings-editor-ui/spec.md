@@ -58,9 +58,3 @@ The companion app SHALL allow the user to change any setting via appropriate UI 
 #### Scenario: Active switch uses accent color
 - **WHEN** a MaterialSwitch is toggled on
 - **THEN** the switch track color is `#E8A44A` (mantle_accent)
-
-## REMOVED Requirements
-
-### Requirement: Live setting updates
-**Reason**: Settings are no longer bidirectional. The phone is the source of truth. The TV does not push setting changes back to the phone. There is no TV-side settings UI to originate changes.
-**Migration**: The `setting_changed` event from TV is no longer emitted for settings (only playback state events remain). The phone always has the authoritative values in its local config store.
