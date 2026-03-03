@@ -30,6 +30,15 @@ class ChimeManager(
         private const val FREQ_G5 = 783.99
 
         private const val INDICATOR_SHOW_DURATION_MS = 3000L
+
+        internal fun calculateMsUntilNextHalfHour(nowMs: Long): Long {
+            val minuteMs = 60 * 1000L
+            val halfHourMs = 30 * minuteMs
+            val msSinceHalfHour = nowMs % halfHourMs
+            val msUntil = halfHourMs - msSinceHalfHour
+            // If we're within 1 second of a half-hour boundary, wait for the next one
+            return if (msUntil < 1000L) halfHourMs else msUntil
+        }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -58,14 +67,8 @@ class ChimeManager(
         scheduledRunnable = null
     }
 
-    private fun calculateMsUntilNextHalfHour(nowMs: Long): Long {
-        val minuteMs = 60 * 1000L
-        val halfHourMs = 30 * minuteMs
-        val msSinceHalfHour = nowMs % halfHourMs
-        val msUntil = halfHourMs - msSinceHalfHour
-        // If we're within 1 second of a half-hour boundary, wait for the next one
-        return if (msUntil < 1000L) halfHourMs else msUntil
-    }
+    private fun calculateMsUntilNextHalfHour(nowMs: Long): Long =
+        Companion.calculateMsUntilNextHalfHour(nowMs)
 
     private fun playChime() {
         Thread {

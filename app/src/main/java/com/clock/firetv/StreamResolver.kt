@@ -80,7 +80,7 @@ class StreamResolver {
         }
     }
 
-    private fun parseResolution(resolution: String?): Int {
+    internal fun parseResolution(resolution: String?): Int {
         return resolution?.replace("p", "")?.toIntOrNull() ?: 0
     }
 }
