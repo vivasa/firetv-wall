@@ -13,6 +13,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -33,6 +35,10 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -43,4 +49,21 @@ dependencies {
 
     // OkHttp for WebSocket client
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Unit test dependencies
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    testImplementation("com.google.truth:truth:1.4.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("androidx.test:core:1.5.0")
+
+    // Instrumentation test dependencies
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test:rules:1.5.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test.espresso:espresso-contrib:3.5.1")
+    debugImplementation("androidx.fragment:fragment-testing:1.6.2")
+    androidTestImplementation("com.google.truth:truth:1.4.2")
 }

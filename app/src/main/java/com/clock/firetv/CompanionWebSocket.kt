@@ -25,6 +25,15 @@ class CompanionWebSocket(
         private const val MAX_TOKENS = 4
 
         private const val KEY_AUTH_TOKENS = "companion_auth_tokens"
+
+        internal fun generateToken(): String {
+            val chars = "0123456789abcdef"
+            return (1..32).map { chars.random() }.joinToString("")
+        }
+
+        internal fun generatePin(): String {
+            return (1000..9999).random().toString()
+        }
     }
 
     interface Listener {
@@ -127,14 +136,9 @@ class CompanionWebSocket(
         return getStoredTokens().contains(token)
     }
 
-    private fun generateToken(): String {
-        val chars = "0123456789abcdef"
-        return (1..32).map { chars.random() }.joinToString("")
-    }
+    private fun generateToken(): String = Companion.generateToken()
 
-    private fun generatePin(): String {
-        return (1000..9999).random().toString()
-    }
+    private fun generatePin(): String = Companion.generatePin()
 
     inner class CompanionSocket(handshake: NanoHTTPD.IHTTPSession) : WebSocket(handshake) {
 

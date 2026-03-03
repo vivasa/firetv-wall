@@ -284,7 +284,7 @@ class YouTubePlayerManager(
         container.layoutParams = params
     }
 
-    private fun parseInput(input: String): YouTubeContent? {
+    internal fun parseInput(input: String): YouTubeContent? {
         val trimmed = input.trim()
 
         val playlistMatcher = PLAYLIST_URL_PATTERN.matcher(trimmed)
@@ -320,7 +320,7 @@ class YouTubePlayerManager(
         return null
     }
 
-    private sealed class YouTubeContent {
+    internal sealed class YouTubeContent {
         data class Playlist(val playlistId: String) : YouTubeContent()
         data class Video(val videoId: String, val playlistId: String?) : YouTubeContent()
     }

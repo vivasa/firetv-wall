@@ -301,7 +301,7 @@ class TvConnectionManager {
         webSocket?.send(json.toString()) ?: Log.w(TAG, "Cannot send, not connected")
     }
 
-    private fun handleMessage(text: String) {
+    internal fun handleMessage(text: String) {
         try {
             val json = JSONObject(text)
             val evt = json.optString("evt", "")
@@ -359,7 +359,7 @@ class TvConnectionManager {
         }
     }
 
-    private fun parseState(data: JSONObject): TvState {
+    internal fun parseState(data: JSONObject): TvState {
         val presets = mutableListOf<Preset>()
         val presetsArr = data.optJSONArray("presets")
         if (presetsArr != null) {
@@ -387,7 +387,7 @@ class TvConnectionManager {
         )
     }
 
-    private fun applySettingToState(current: TvState, key: String, value: Any): TvState {
+    internal fun applySettingToState(current: TvState, key: String, value: Any): TvState {
         return when (key) {
             "theme" -> current.copy(theme = (value as Number).toInt())
             "primaryTimezone" -> current.copy(primaryTimezone = value.toString())
