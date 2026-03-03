@@ -45,8 +45,7 @@ class CompanionWebSocket(
         fun onStopPlayback()
         fun onSeek(offsetSec: Int)
         fun onSkip(direction: Int)
-        fun onSettingChanged(key: String, value: Any)
-        fun onSyncPresets(presets: JSONArray)
+        fun onSyncConfig(config: JSONObject)
     }
 
     var listener: Listener? = null
@@ -103,7 +102,7 @@ class CompanionWebSocket(
         state.put("playerVisible", settings.playerVisible)
 
         val presets = JSONArray()
-        for (i in 0 until SettingsManager.PRESET_COUNT) {
+        for (i in 0 until settings.presetCount) {
             val p = JSONObject()
             p.put("index", i)
             p.put("url", settings.getPresetUrl(i))
@@ -333,14 +332,14 @@ class CompanionWebSocket(
                     "stop" -> listener?.onStopPlayback()
                     "seek" -> listener?.onSeek(json.optInt("offsetSec", 0))
                     "skip" -> listener?.onSkip(json.optInt("direction", 1))
-                    "set" -> {
-                        val key = json.optString("key", "")
-                        val value = json.opt("value") ?: return@post
-                        listener?.onSettingChanged(key, value)
-                    }
-                    "sync_presets" -> {
-                        val presets = json.optJSONArray("presets") ?: return@post
-                        listener?.onSyncPresets(presets)
+                    "sync_config" -> {
+                        val config = json.optJSONObject("config") ?: return@post
+                        listener?.onSyncConfig(config)
+                        val version = config.optInt("version", -1)
+                        sendEvt(JSONObject().apply {
+                            put("evt", "config_applied")
+                            put("version", version)
+                        })
                     }
                     "get_state" -> {
                         sendEvt(JSONObject().apply {

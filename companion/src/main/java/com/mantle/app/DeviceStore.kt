@@ -1,4 +1,4 @@
-package com.clock.firetv.companion
+package com.mantle.app
 
 import android.content.Context
 import org.json.JSONArray

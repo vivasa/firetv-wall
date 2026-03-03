@@ -1,8 +1,11 @@
-package com.clock.firetv.companion
+package com.mantle.app
 
 import android.app.Application
 
-class CompanionApp : Application() {
+class MantleApp : Application() {
+
+    lateinit var configStore: MantleConfigStore
+        private set
 
     lateinit var connectionManager: TvConnectionManager
         private set
@@ -13,12 +16,14 @@ class CompanionApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        configStore = MantleConfigStore(this)
         deviceStore = DeviceStore(this)
         connectionManager = TvConnectionManager()
+        connectionManager.registerConfigListener()
     }
 
     companion object {
-        lateinit var instance: CompanionApp
+        lateinit var instance: MantleApp
             private set
     }
 }

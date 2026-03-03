@@ -1,4 +1,4 @@
-package com.clock.firetv.companion
+package com.mantle.app
 
 import android.os.Handler
 import android.os.Looper
@@ -8,14 +8,16 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class TvConnectionManager {
+class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     companion object {
         private const val TAG = "TvConnectionMgr"
+        private const val PROTOCOL_VERSION = 1
+        private const val SYNC_DEBOUNCE_MS = 500L
+        private const val PING_INTERVAL_MS = 20_000L
     }
 
     enum class ConnectionState {
@@ -25,36 +27,16 @@ class TvConnectionManager {
     data class TvState(
         val deviceId: String = "",
         val deviceName: String = "",
-        val theme: Int = 0,
-        val primaryTimezone: String = "",
-        val secondaryTimezone: String = "",
-        val timeFormat: Int = 0,
-        val chimeEnabled: Boolean = true,
-        val wallpaperEnabled: Boolean = true,
-        val wallpaperInterval: Int = 5,
-        val driftEnabled: Boolean = true,
-        val nightDimEnabled: Boolean = true,
-        val activePreset: Int = -1,
-        val playerSize: Int = 1,
-        val playerVisible: Boolean = true,
-        val presets: List<Preset> = emptyList(),
         val nowPlayingTitle: String = "",
         val nowPlayingPlaylist: String = "",
         val isPlaying: Boolean = false
     )
 
-    data class Preset(
-        val index: Int,
-        val url: String,
-        val name: String
-    )
-
     interface EventListener {
         fun onConnectionStateChanged(state: ConnectionState)
-        fun onStateReceived(tvState: TvState)
         fun onTrackChanged(title: String, playlist: String)
         fun onPlaybackStateChanged(playing: Boolean)
-        fun onSettingChanged(key: String, value: Any)
+        fun onConfigApplied(version: Int)
     }
 
     var state: ConnectionState = ConnectionState.DISCONNECTED
@@ -64,6 +46,9 @@ class TvConnectionManager {
         private set
 
     var lastPairedToken: String? = null
+        private set
+
+    var lastSyncedVersion: Int = -1
         private set
 
     private val listeners = mutableListOf<EventListener>()
@@ -80,6 +65,19 @@ class TvConnectionManager {
     private val maxReconnectAttempts = 3
     private val reconnectDelays = longArrayOf(2000, 4000, 8000)
 
+    // Debounce for config sync
+    private val syncRunnable = Runnable { sendSyncConfig() }
+
+    // Keepalive ping
+    private val pingRunnable = object : Runnable {
+        override fun run() {
+            if (state == ConnectionState.CONNECTED) {
+                send(JSONObject().apply { put("cmd", "ping") })
+                mainHandler.postDelayed(this, PING_INTERVAL_MS)
+            }
+        }
+    }
+
     private val client = OkHttpClient.Builder()
         .pingInterval(15, TimeUnit.SECONDS)
         .build()
@@ -90,6 +88,22 @@ class TvConnectionManager {
 
     fun removeListener(listener: EventListener) {
         listeners.remove(listener)
+    }
+
+    fun registerConfigListener() {
+        MantleApp.instance.configStore.addListener(this)
+    }
+
+    fun unregisterConfigListener() {
+        MantleApp.instance.configStore.removeListener(this)
+    }
+
+    // --- MantleConfigStore.OnConfigChangedListener ---
+
+    override fun onConfigChanged(config: MantleConfig) {
+        if (state == ConnectionState.CONNECTED) {
+            scheduleSyncConfig()
+        }
     }
 
     fun connect(host: String, port: Int, token: String) {
@@ -112,6 +126,7 @@ class TvConnectionManager {
                 val auth = JSONObject().apply {
                     put("cmd", "auth")
                     put("token", pendingToken)
+                    put("protocolVersion", PROTOCOL_VERSION)
                 }
                 webSocket.send(auth.toString())
             }
@@ -172,6 +187,8 @@ class TvConnectionManager {
     fun disconnect() {
         wasConnected = false
         reconnectAttempt = 0
+        mainHandler.removeCallbacks(syncRunnable)
+        mainHandler.removeCallbacks(pingRunnable)
         mainHandler.removeCallbacksAndMessages(null)
         webSocket?.close(1000, "user disconnect")
         webSocket = null
@@ -210,6 +227,7 @@ class TvConnectionManager {
                 val auth = JSONObject().apply {
                     put("cmd", "auth")
                     put("token", token)
+                    put("protocolVersion", PROTOCOL_VERSION)
                 }
                 webSocket.send(auth.toString())
             }
@@ -270,31 +288,23 @@ class TvConnectionManager {
         })
     }
 
-    fun sendSet(key: String, value: Any) {
-        send(JSONObject().apply {
-            put("cmd", "set")
-            put("key", key)
-            put("value", value)
-        })
-    }
-
-    fun sendSyncPresets(presets: List<Preset>) {
-        val arr = JSONArray()
-        presets.forEach { p ->
-            arr.put(JSONObject().apply {
-                put("index", p.index)
-                put("url", p.url)
-                put("name", p.name)
-            })
+    fun sendSyncConfig() {
+        val configJson = MantleApp.instance.configStore.toJson()
+        val msg = JSONObject().apply {
+            put("cmd", "sync_config")
+            put("config", configJson)
         }
-        send(JSONObject().apply {
-            put("cmd", "sync_presets")
-            put("presets", arr)
-        })
+        Log.d(TAG, "Sending sync_config v${configJson.optInt("version")}")
+        send(msg)
     }
 
     fun sendGetState() {
         send(JSONObject().apply { put("cmd", "get_state") })
+    }
+
+    private fun scheduleSyncConfig() {
+        mainHandler.removeCallbacks(syncRunnable)
+        mainHandler.postDelayed(syncRunnable, SYNC_DEBOUNCE_MS)
     }
 
     private fun send(json: JSONObject) {
@@ -311,6 +321,8 @@ class TvConnectionManager {
                         wasConnected = true
                         reconnectAttempt = 0
                         updateState(ConnectionState.CONNECTED)
+                        sendSyncConfig()
+                        mainHandler.postDelayed(pingRunnable, PING_INTERVAL_MS)
                     }
                     "auth_failed" -> {
                         Log.w(TAG, "Auth failed: ${json.optString("reason")}")
@@ -325,11 +337,14 @@ class TvConnectionManager {
                         wasConnected = true
                         reconnectAttempt = 0
                         updateState(ConnectionState.CONNECTED)
+                        sendSyncConfig()
+                        mainHandler.postDelayed(pingRunnable, PING_INTERVAL_MS)
                     }
-                    "state" -> {
-                        val data = json.getJSONObject("data")
-                        tvState = parseState(data)
-                        listeners.forEach { it.onStateReceived(tvState) }
+                    "config_applied" -> {
+                        val version = json.optInt("version", -1)
+                        lastSyncedVersion = version
+                        Log.d(TAG, "Config applied on TV, version=$version")
+                        listeners.forEach { it.onConfigApplied(version) }
                     }
                     "track_changed" -> {
                         val title = json.optString("title", "")
@@ -342,12 +357,6 @@ class TvConnectionManager {
                         tvState = tvState.copy(isPlaying = playing)
                         listeners.forEach { it.onPlaybackStateChanged(playing) }
                     }
-                    "setting_changed" -> {
-                        val key = json.optString("key", "")
-                        val value = json.opt("value") ?: return@post
-                        tvState = applySettingToState(tvState, key, value)
-                        listeners.forEach { it.onSettingChanged(key, value) }
-                    }
                     "pong" -> { /* keepalive, ignore */ }
                     "error" -> {
                         Log.w(TAG, "Server error: ${json.optString("message")}")
@@ -356,52 +365,6 @@ class TvConnectionManager {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse message: $text", e)
-        }
-    }
-
-    internal fun parseState(data: JSONObject): TvState {
-        val presets = mutableListOf<Preset>()
-        val presetsArr = data.optJSONArray("presets")
-        if (presetsArr != null) {
-            for (i in 0 until presetsArr.length()) {
-                val p = presetsArr.getJSONObject(i)
-                presets.add(Preset(p.getInt("index"), p.optString("url", ""), p.optString("name", "")))
-            }
-        }
-        return TvState(
-            deviceId = data.optString("deviceId", ""),
-            deviceName = data.optString("deviceName", ""),
-            theme = data.optInt("theme", 0),
-            primaryTimezone = data.optString("primaryTimezone", ""),
-            secondaryTimezone = data.optString("secondaryTimezone", ""),
-            timeFormat = data.optInt("timeFormat", 0),
-            chimeEnabled = data.optBoolean("chimeEnabled", true),
-            wallpaperEnabled = data.optBoolean("wallpaperEnabled", true),
-            wallpaperInterval = data.optInt("wallpaperInterval", 5),
-            driftEnabled = data.optBoolean("driftEnabled", true),
-            nightDimEnabled = data.optBoolean("nightDimEnabled", true),
-            activePreset = data.optInt("activePreset", -1),
-            playerSize = data.optInt("playerSize", 1),
-            playerVisible = data.optBoolean("playerVisible", true),
-            presets = presets
-        )
-    }
-
-    internal fun applySettingToState(current: TvState, key: String, value: Any): TvState {
-        return when (key) {
-            "theme" -> current.copy(theme = (value as Number).toInt())
-            "primaryTimezone" -> current.copy(primaryTimezone = value.toString())
-            "secondaryTimezone" -> current.copy(secondaryTimezone = value.toString())
-            "timeFormat" -> current.copy(timeFormat = (value as Number).toInt())
-            "chimeEnabled" -> current.copy(chimeEnabled = value as Boolean)
-            "wallpaperEnabled" -> current.copy(wallpaperEnabled = value as Boolean)
-            "wallpaperInterval" -> current.copy(wallpaperInterval = (value as Number).toInt())
-            "driftEnabled" -> current.copy(driftEnabled = value as Boolean)
-            "nightDimEnabled" -> current.copy(nightDimEnabled = value as Boolean)
-            "activePreset" -> current.copy(activePreset = (value as Number).toInt())
-            "playerSize" -> current.copy(playerSize = (value as Number).toInt())
-            "playerVisible" -> current.copy(playerVisible = value as Boolean)
-            else -> current
         }
     }
 

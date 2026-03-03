@@ -1,4 +1,4 @@
-package com.clock.firetv.companion
+package com.mantle.app
 
 import android.os.Bundle
 import android.util.Log
@@ -6,19 +6,19 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 
-class MainActivity : AppCompatActivity() {
+class MantleActivity : AppCompatActivity() {
 
     companion object {
-        private const val TAG = "MainActivity"
+        private const val TAG = "MantleActivity"
     }
 
-    private val devicesFragment = DevicesFragment()
-    private val remoteFragment = RemoteFragment()
-    private val settingsFragment = SettingsFragment()
-    private var activeFragment: Fragment = devicesFragment
+    private val homeFragment = HomeFragment()
+    private val musicFragment = MusicFragment()
+    private val tvFragment = TvFragment()
+    private var activeFragment: Fragment = homeFragment
 
-    private val connectionManager get() = CompanionApp.instance.connectionManager
-    private val deviceStore get() = CompanionApp.instance.deviceStore
+    private val connectionManager get() = MantleApp.instance.connectionManager
+    private val deviceStore get() = MantleApp.instance.deviceStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,18 +26,18 @@ class MainActivity : AppCompatActivity() {
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
-                .add(R.id.fragmentContainer, settingsFragment, "settings").hide(settingsFragment)
-                .add(R.id.fragmentContainer, remoteFragment, "remote").hide(remoteFragment)
-                .add(R.id.fragmentContainer, devicesFragment, "devices")
+                .add(R.id.fragmentContainer, tvFragment, "tv").hide(tvFragment)
+                .add(R.id.fragmentContainer, musicFragment, "music").hide(musicFragment)
+                .add(R.id.fragmentContainer, homeFragment, "home")
                 .commit()
         }
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
         bottomNav.setOnItemSelectedListener { item ->
             val target = when (item.itemId) {
-                R.id.nav_devices -> devicesFragment
-                R.id.nav_remote -> remoteFragment
-                R.id.nav_settings -> settingsFragment
+                R.id.nav_home -> homeFragment
+                R.id.nav_music -> musicFragment
+                R.id.nav_tv -> tvFragment
                 else -> return@setOnItemSelectedListener false
             }
             supportFragmentManager.beginTransaction()
@@ -48,13 +48,12 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // Auto-connect to last device on launch
-        tryAutoConnect()
+        // Home tab is default (already selected in layout)
     }
 
     override fun onResume() {
         super.onResume()
-        // Reconnect if we were previously connected but lost connection
+        // Auto-connect to last device on resume
         if (connectionManager.state == TvConnectionManager.ConnectionState.DISCONNECTED) {
             tryAutoConnect()
         }
@@ -65,12 +64,10 @@ class MainActivity : AppCompatActivity() {
         val lastDevice = deviceStore.getLastConnectedDevice() ?: return
         Log.d(TAG, "Auto-connecting to ${lastDevice.deviceName} (${lastDevice.host}:${lastDevice.port})")
         connectionManager.connect(lastDevice.host, lastDevice.port, lastDevice.token)
-        // Switch to remote tab to show "Connecting..." state
-        switchToRemote()
     }
 
-    fun switchToRemote() {
+    fun switchToTv() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-        bottomNav.selectedItemId = R.id.nav_remote
+        bottomNav.selectedItemId = R.id.nav_tv
     }
 }

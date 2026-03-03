@@ -1,4 +1,4 @@
-package com.clock.firetv.companion
+package com.mantle.app
 
 import android.view.LayoutInflater
 import android.view.View

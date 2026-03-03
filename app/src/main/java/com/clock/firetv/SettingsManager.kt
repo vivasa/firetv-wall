@@ -17,13 +17,12 @@ class SettingsManager(context: Context) {
         private const val KEY_WALLPAPER_INTERVAL = "wallpaper_interval"
         private const val KEY_DRIFT_ENABLED = "drift_enabled"
         private const val KEY_NIGHT_DIM_ENABLED = "night_dim_enabled"
-        private const val KEY_YOUTUBE_URL = "youtube_url"
         private const val KEY_PLAYER_SIZE = "player_size"
         private const val KEY_PLAYER_VISIBLE = "player_visible"
         private const val KEY_PRESET_URL_PREFIX = "preset_url_"
         private const val KEY_PRESET_NAME_PREFIX = "preset_name_"
         private const val KEY_ACTIVE_PRESET = "active_preset"
-        private const val KEY_PRESETS_MIGRATED = "presets_migrated"
+        private const val KEY_PRESET_COUNT = "preset_count"
 
         const val FORMAT_12H = 0
         const val FORMAT_24H = 1
@@ -31,8 +30,6 @@ class SettingsManager(context: Context) {
         const val PLAYER_SMALL = 0
         const val PLAYER_MEDIUM = 1
         const val PLAYER_LARGE = 2
-
-        const val PRESET_COUNT = 4
 
         const val THEME_CLASSIC = 0
         const val THEME_GALLERY = 1
@@ -78,10 +75,6 @@ class SettingsManager(context: Context) {
         get() = prefs.getBoolean(KEY_NIGHT_DIM_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_NIGHT_DIM_ENABLED, value).apply()
 
-    var youtubeUrl: String
-        get() = prefs.getString(KEY_YOUTUBE_URL, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_YOUTUBE_URL, value).apply()
-
     var playerSize: Int
         get() = prefs.getInt(KEY_PLAYER_SIZE, PLAYER_MEDIUM)
         set(value) = prefs.edit().putInt(KEY_PLAYER_SIZE, value).apply()
@@ -95,6 +88,10 @@ class SettingsManager(context: Context) {
         get() = prefs.getInt(KEY_ACTIVE_PRESET, -1)
         set(value) = prefs.edit().putInt(KEY_ACTIVE_PRESET, value).apply()
 
+    var presetCount: Int
+        get() = prefs.getInt(KEY_PRESET_COUNT, 0)
+        set(value) = prefs.edit().putInt(KEY_PRESET_COUNT, value).apply()
+
     fun getPresetUrl(index: Int): String =
         prefs.getString("${KEY_PRESET_URL_PREFIX}$index", "") ?: ""
 
@@ -107,23 +104,30 @@ class SettingsManager(context: Context) {
     fun setPresetName(index: Int, name: String) =
         prefs.edit().putString("${KEY_PRESET_NAME_PREFIX}$index", name).apply()
 
+    fun setPresetsFromConfig(presets: org.json.JSONArray) {
+        val newCount = presets.length()
+        val oldCount = presetCount
+        val editor = prefs.edit()
+        for (i in 0 until newCount) {
+            val p = presets.getJSONObject(i)
+            editor.putString("${KEY_PRESET_URL_PREFIX}$i", p.optString("url", ""))
+            editor.putString("${KEY_PRESET_NAME_PREFIX}$i", p.optString("name", "Preset ${i + 1}"))
+        }
+        // Clear old preset slots beyond the new array length
+        for (i in newCount until oldCount) {
+            editor.remove("${KEY_PRESET_URL_PREFIX}$i")
+            editor.remove("${KEY_PRESET_NAME_PREFIX}$i")
+        }
+        editor.putInt(KEY_PRESET_COUNT, newCount)
+        editor.apply()
+    }
+
     val activeYoutubeUrl: String
         get() {
             val idx = activePreset
-            if (idx < 0 || idx >= PRESET_COUNT) return ""
+            if (idx < 0 || idx >= presetCount) return ""
             return getPresetUrl(idx)
         }
-
-    fun migrateFromSingleUrl() {
-        if (prefs.getBoolean(KEY_PRESETS_MIGRATED, false)) return
-        val oldUrl = prefs.getString(KEY_YOUTUBE_URL, "") ?: ""
-        if (oldUrl.isNotBlank()) {
-            setPresetUrl(0, oldUrl)
-            activePreset = 0
-            prefs.edit().remove(KEY_YOUTUBE_URL).apply()
-        }
-        prefs.edit().putBoolean(KEY_PRESETS_MIGRATED, true).apply()
-    }
 
     fun getPlayerDimensions(): Pair<Int, Int> = when {
         theme == THEME_GALLERY && playerSize == PLAYER_SMALL -> 528 to 297

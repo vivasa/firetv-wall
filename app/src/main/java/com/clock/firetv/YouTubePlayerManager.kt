@@ -1,6 +1,7 @@
 package com.clock.firetv
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import android.view.ViewGroup
 import androidx.annotation.OptIn
@@ -50,6 +51,11 @@ class YouTubePlayerManager(
     private var currentIndex = 0
     private var currentVideoUrl: String? = null
     private var currentLoadJob: Job? = null
+    private var currentInputUrl: String? = null
+
+    // Resume state for surviving Activity.recreate()
+    private var pendingResumeIndex: Int = -1
+    private var pendingResumePositionMs: Long = -1L
 
     @OptIn(UnstableApi::class)
     fun initialize() {
@@ -79,6 +85,12 @@ class YouTubePlayerManager(
             stop()
             return
         }
+
+        // Skip reload if already playing the same content
+        if (urlOrId == currentInputUrl) {
+            return
+        }
+        currentInputUrl = urlOrId
 
         val parsed = parseInput(urlOrId)
         if (parsed == null) {
@@ -121,9 +133,14 @@ class YouTubePlayerManager(
         currentPlaylistTitle = result.title
         playlistVideoUrls = result.items.map { it.url }
         playlistVideoTitles = result.items.map { it.title }
-        currentIndex = 0
-        currentVideoUrl = playlistVideoUrls[0]
-        resolveAndPlay(playlistVideoUrls[0])
+        currentIndex = if (pendingResumeIndex in playlistVideoUrls.indices) {
+            pendingResumeIndex
+        } else {
+            0
+        }
+        pendingResumeIndex = -1
+        currentVideoUrl = playlistVideoUrls[currentIndex]
+        resolveAndPlay(playlistVideoUrls[currentIndex])
     }
 
     private suspend fun loadPlaylistStartingAtVideo(playlistId: String, videoId: String) {
@@ -137,8 +154,13 @@ class YouTubePlayerManager(
         currentPlaylistTitle = result.title
         playlistVideoUrls = result.items.map { it.url }
         playlistVideoTitles = result.items.map { it.title }
-        val idx = playlistVideoUrls.indexOfFirst { it.contains(videoId) }
-        currentIndex = if (idx >= 0) idx else 0
+        currentIndex = if (pendingResumeIndex in playlistVideoUrls.indices) {
+            pendingResumeIndex
+        } else {
+            val idx = playlistVideoUrls.indexOfFirst { it.contains(videoId) }
+            if (idx >= 0) idx else 0
+        }
+        pendingResumeIndex = -1
         currentVideoUrl = playlistVideoUrls[currentIndex]
         resolveAndPlay(playlistVideoUrls[currentIndex])
     }
@@ -162,6 +184,10 @@ class YouTubePlayerManager(
                 exo.setMediaItem(MediaItem.fromUri(result.url))
                 exo.prepare()
                 exo.play()
+                if (pendingResumePositionMs > 0) {
+                    exo.seekTo(pendingResumePositionMs)
+                    pendingResumePositionMs = -1L
+                }
             }
             trackChangeListener?.onTrackChanged(currentVideoTitle, currentPlaylistTitle)
         }
@@ -257,6 +283,19 @@ class YouTubePlayerManager(
 
     fun hasPlaylist(): Boolean = playlistVideoUrls.isNotEmpty()
 
+    fun savePlaybackState(prefs: SharedPreferences) {
+        prefs.edit()
+            .putInt("yt_resume_index", currentIndex)
+            .putLong("yt_resume_pos", player?.currentPosition ?: 0L)
+            .apply()
+    }
+
+    fun loadPlaybackState(prefs: SharedPreferences) {
+        pendingResumeIndex = prefs.getInt("yt_resume_index", -1)
+        pendingResumePositionMs = prefs.getLong("yt_resume_pos", -1L)
+        prefs.edit().remove("yt_resume_index").remove("yt_resume_pos").apply()
+    }
+
     fun stop() {
         currentLoadJob?.cancel()
         player?.stop()
@@ -267,6 +306,7 @@ class YouTubePlayerManager(
         currentVideoTitle = null
         currentIndex = 0
         currentVideoUrl = null
+        currentInputUrl = null
         trackChangeListener?.onTrackChanged(null, null)
     }
 
