@@ -13,6 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
 class WebSocketPairingIntegrationTest {
@@ -29,10 +30,9 @@ class WebSocketPairingIntegrationTest {
             override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
                 stateChanges.add(state)
             }
-            override fun onStateReceived(tvState: TvConnectionManager.TvState) {}
             override fun onTrackChanged(title: String, playlist: String) {}
             override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onSettingChanged(key: String, value: Any) {}
+            override fun onConfigApplied(version: Int) {}
         })
     }
 
