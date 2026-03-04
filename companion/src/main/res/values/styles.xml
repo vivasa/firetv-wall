@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Typography Scale -->
+    <style name="TextAppearance.Mantle.Title" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">22sp</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">@color/mantle_on_surface</item>
+    </style>
+
+    <style name="TextAppearance.Mantle.Heading" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.01</item>
+        <item name="android:textColor">@color/mantle_on_surface</item>
+    </style>
+
+    <style name="TextAppearance.Mantle.Body" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textFontWeight">400</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:textColor">@color/mantle_on_surface</item>
+    </style>
+
+    <style name="TextAppearance.Mantle.Caption" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textFontWeight">400</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:letterSpacing">0.03</item>
+        <item name="android:textColor">@color/mantle_on_surface_muted</item>
+    </style>
+
+    <style name="TextAppearance.Mantle.Overline" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:textColor">@color/mantle_on_surface_muted</item>
+    </style>
+
+    <!-- Navigation -->
+    <style name="Mantle.NavIndicator.Hidden" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@android:color/transparent</item>
+    </style>
+
+    <!-- Card Style -->
+    <style name="Mantle.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/mantle_surface</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="contentPadding">16dp</item>
+    </style>
+
+</resources>

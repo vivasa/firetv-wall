@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_lg">
+
+        <!-- Connection Card -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Mantle.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <View
+                        android:id="@+id/connectionDot"
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:layout_marginEnd="@dimen/spacing_sm" />
+
+                    <TextView
+                        android:id="@+id/connectionStatus"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Disconnected"
+                        android:textAppearance="@style/TextAppearance.Mantle.Heading" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnReconnect"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Reconnect"
+                        android:textColor="@color/mantle_accent"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/reconnectingProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:indeterminate="true"
+                    android:visibility="gone"
+                    android:layout_marginTop="@dimen/spacing_sm" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Now Playing Card (elevated) -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Mantle.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/mantle_surface_elevated">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Now Playing"
+                    android:textAppearance="@style/TextAppearance.Mantle.Title"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:id="@+id/nowPlayingTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Not playing"
+                    android:textAppearance="@style/TextAppearance.Mantle.Heading" />
+
+                <TextView
+                    android:id="@+id/nowPlayingPlaylist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.Mantle.Caption"
+                    android:visibility="gone"
+                    android:layout_marginBottom="@dimen/spacing_lg" />
+
+                <!-- Playback Controls -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:layout_marginTop="@dimen/spacing_sm">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSkipPrev"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:contentDescription="Previous"
+                        app:icon="@drawable/ic_skip_prev"
+                        app:iconTint="@color/mantle_on_surface_muted" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRewind"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:contentDescription="Rewind"
+                        app:icon="@drawable/ic_rewind"
+                        app:iconTint="@color/mantle_on_surface_muted" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnStop"
+                        style="@style/Widget.Material3.Button.IconButton.Filled.Tonal"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:backgroundTint="@color/mantle_accent"
+                        android:contentDescription="Stop"
+                        app:icon="@drawable/ic_stop"
+                        app:iconTint="@color/mantle_on_accent" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnForward"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:contentDescription="Forward"
+                        app:icon="@drawable/ic_forward"
+                        app:iconTint="@color/mantle_on_surface_muted" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSkipNext"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:contentDescription="Next"
+                        app:icon="@drawable/ic_skip_next"
+                        app:iconTint="@color/mantle_on_surface_muted" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Presets Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Presets"
+            android:textAppearance="@style/TextAppearance.Mantle.Heading"
+            android:layout_marginBottom="@dimen/spacing_sm" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/presetChips"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_xl" />
+
+        <!-- Devices Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Devices"
+            android:textAppearance="@style/TextAppearance.Mantle.Heading"
+            android:layout_marginBottom="@dimen/spacing_sm" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Mantle.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/scanningProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:indeterminate="true"
+                    android:visibility="gone"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/deviceList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
+                <LinearLayout
+                    android:id="@+id/emptyDeviceState"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="@dimen/spacing_xl"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="No Fire TV devices found"
+                        android:textAppearance="@style/TextAppearance.Mantle.Body"
+                        android:textColor="@color/mantle_on_surface_muted" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnManualEntry"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Enter IP manually"
+                    android:textColor="@color/mantle_accent"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/spacing_sm" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+</ScrollView>

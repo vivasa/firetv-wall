@@ -1,24 +1,22 @@
 package com.clock.firetv.companion
 
 import com.google.common.truth.Truth.assertThat
-import org.json.JSONObject
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
 class TvConnectionManagerMessageTest {
 
     private lateinit var manager: TvConnectionManager
     private var lastConnectionState: TvConnectionManager.ConnectionState? = null
-    private var lastTvState: TvConnectionManager.TvState? = null
     private var lastTrackTitle: String? = null
     private var lastTrackPlaylist: String? = null
     private var lastPlayingState: Boolean? = null
-    private var lastSettingKey: String? = null
-    private var lastSettingValue: Any? = null
+    private var lastConfigVersion: Int? = null
 
     @Before
     fun setUp() {
@@ -27,9 +25,6 @@ class TvConnectionManagerMessageTest {
             override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
                 lastConnectionState = state
             }
-            override fun onStateReceived(tvState: TvConnectionManager.TvState) {
-                lastTvState = tvState
-            }
             override fun onTrackChanged(title: String, playlist: String) {
                 lastTrackTitle = title
                 lastTrackPlaylist = playlist
@@ -37,9 +32,8 @@ class TvConnectionManagerMessageTest {
             override fun onPlaybackStateChanged(playing: Boolean) {
                 lastPlayingState = playing
             }
-            override fun onSettingChanged(key: String, value: Any) {
-                lastSettingKey = key
-                lastSettingValue = value
+            override fun onConfigApplied(version: Int) {
+                lastConfigVersion = version
             }
         })
     }
@@ -62,26 +56,6 @@ class TvConnectionManagerMessageTest {
     }
 
     @Test
-    fun `handleMessage state updates tvState and notifies listener`() {
-        val stateData = JSONObject().apply {
-            put("theme", 2)
-            put("chimeEnabled", false)
-            put("deviceId", "test-id")
-            put("deviceName", "Test TV")
-        }
-        manager.handleMessage(JSONObject().apply {
-            put("evt", "state")
-            put("data", stateData)
-        }.toString())
-        ShadowLooper.idleMainLooper()
-
-        assertThat(manager.tvState.theme).isEqualTo(2)
-        assertThat(manager.tvState.chimeEnabled).isFalse()
-        assertThat(lastTvState).isNotNull()
-        assertThat(lastTvState!!.theme).isEqualTo(2)
-    }
-
-    @Test
     fun `handleMessage track_changed updates now playing`() {
         manager.handleMessage("""{"evt":"track_changed","title":"My Song","playlist":"Best Hits"}""")
         ShadowLooper.idleMainLooper()
@@ -99,15 +73,6 @@ class TvConnectionManagerMessageTest {
 
         assertThat(manager.tvState.isPlaying).isTrue()
         assertThat(lastPlayingState).isTrue()
-    }
-
-    @Test
-    fun `handleMessage setting_changed updates tvState via applySettingToState`() {
-        manager.handleMessage("""{"evt":"setting_changed","key":"theme","value":2}""")
-        ShadowLooper.idleMainLooper()
-
-        assertThat(manager.tvState.theme).isEqualTo(2)
-        assertThat(lastSettingKey).isEqualTo("theme")
     }
 
     @Test

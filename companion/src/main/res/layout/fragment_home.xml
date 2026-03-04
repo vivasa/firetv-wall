@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_lg">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Your Setup"
+            android:textAppearance="@style/TextAppearance.Mantle.Title"
+            android:layout_marginBottom="@dimen/spacing_lg" />
+
+        <!-- Display Card -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Mantle.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Display"
+                    android:textAppearance="@style/TextAppearance.Mantle.Heading"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutTheme"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Theme"
+                    android:layout_marginBottom="@dimen/spacing_md">
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/dropdownTheme"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutTimeFormat"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Time Format"
+                    android:layout_marginBottom="@dimen/spacing_md">
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/dropdownTimeFormat"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Primary Timezone"
+                    android:textAppearance="@style/TextAppearance.Mantle.Caption"
+                    android:layout_marginBottom="@dimen/spacing_xs" />
+                <TextView
+                    android:id="@+id/tvPrimaryTimezone"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:gravity="center_vertical"
+                    android:text="Not set"
+                    android:textAppearance="@style/TextAppearance.Mantle.Body"
+                    android:background="?attr/selectableItemBackground"
+                    android:paddingStart="@dimen/spacing_xs"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Secondary Timezone"
+                    android:textAppearance="@style/TextAppearance.Mantle.Caption"
+                    android:layout_marginBottom="@dimen/spacing_xs" />
+                <TextView
+                    android:id="@+id/tvSecondaryTimezone"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:gravity="center_vertical"
+                    android:text="Not set"
+                    android:textAppearance="@style/TextAppearance.Mantle.Body"
+                    android:background="?attr/selectableItemBackground"
+                    android:paddingStart="@dimen/spacing_xs" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Ambiance Card -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Mantle.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ambiance"
+                    android:textAppearance="@style/TextAppearance.Mantle.Heading"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchWallpaper"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Wallpaper"
+                    android:textAppearance="@style/TextAppearance.Mantle.Body"
+                    android:layout_marginBottom="@dimen/spacing_xs" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutWallpaperInterval"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Wallpaper Interval (min)"
+                    android:layout_marginBottom="@dimen/spacing_md">
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/dropdownWallpaperInterval"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchNightDim"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Night Dim"
+                    android:textAppearance="@style/TextAppearance.Mantle.Body"
+                    android:layout_marginBottom="@dimen/spacing_xs" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchDrift"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Drift Animation"
+                    android:textAppearance="@style/TextAppearance.Mantle.Body"
+                    android:layout_marginBottom="@dimen/spacing_xs" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchChime"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Hourly Chime"
+                    android:textAppearance="@style/TextAppearance.Mantle.Body" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Player Card -->
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Mantle.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_lg">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Player"
+                    android:textAppearance="@style/TextAppearance.Mantle.Heading"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchPlayerVisible"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Show Player"
+                    android:textAppearance="@style/TextAppearance.Mantle.Body"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutPlayerSize"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Player Size">
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/dropdownPlayerSize"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+</ScrollView>

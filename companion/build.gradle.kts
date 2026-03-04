@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.clock.firetv.companion"
+    namespace = "com.mantle.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.clock.firetv.companion"
+        applicationId = "com.mantle.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

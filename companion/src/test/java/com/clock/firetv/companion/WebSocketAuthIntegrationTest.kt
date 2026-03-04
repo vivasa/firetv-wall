@@ -12,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
 class WebSocketAuthIntegrationTest {
@@ -19,8 +20,6 @@ class WebSocketAuthIntegrationTest {
     private lateinit var manager: TvConnectionManager
     private lateinit var server: MockWebServer
     private val stateChanges = mutableListOf<TvConnectionManager.ConnectionState>()
-    private var receivedTvState: TvConnectionManager.TvState? = null
-
     @Before
     fun setUp() {
         manager = TvConnectionManager()
@@ -29,12 +28,9 @@ class WebSocketAuthIntegrationTest {
             override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
                 stateChanges.add(state)
             }
-            override fun onStateReceived(tvState: TvConnectionManager.TvState) {
-                receivedTvState = tvState
-            }
             override fun onTrackChanged(title: String, playlist: String) {}
             override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onSettingChanged(key: String, value: Any) {}
+            override fun onConfigApplied(version: Int) {}
         })
     }
 
@@ -47,20 +43,12 @@ class WebSocketAuthIntegrationTest {
     }
 
     @Test
-    fun `valid token authentication results in auth_ok and state dump`() {
+    fun `valid token authentication results in auth_ok and connected state`() {
         server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val json = JSONObject(text)
                 if (json.optString("cmd") == "auth" && json.optString("token") == "valid-token") {
                     webSocket.send("""{"evt":"auth_ok","deviceId":"tv-1","deviceName":"My TV"}""")
-                    webSocket.send(JSONObject().apply {
-                        put("evt", "state")
-                        put("data", JSONObject().apply {
-                            put("theme", 2)
-                            put("deviceId", "tv-1")
-                            put("deviceName", "My TV")
-                        })
-                    }.toString())
                 }
             }
         }))
@@ -71,8 +59,6 @@ class WebSocketAuthIntegrationTest {
         ShadowLooper.idleMainLooper()
 
         assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.CONNECTED)
-        assertThat(receivedTvState).isNotNull()
-        assertThat(receivedTvState!!.theme).isEqualTo(2)
     }
 
     @Test

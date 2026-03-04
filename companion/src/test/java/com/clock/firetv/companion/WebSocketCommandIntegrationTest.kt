@@ -12,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
 class WebSocketCommandIntegrationTest {
@@ -23,7 +24,6 @@ class WebSocketCommandIntegrationTest {
 
     private var lastTrackTitle: String? = null
     private var lastTrackPlaylist: String? = null
-    private var lastSettingKey: String? = null
 
     @Before
     fun setUp() {
@@ -31,15 +31,12 @@ class WebSocketCommandIntegrationTest {
         server = MockWebServer()
         manager.addListener(object : TvConnectionManager.EventListener {
             override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {}
-            override fun onStateReceived(tvState: TvConnectionManager.TvState) {}
             override fun onTrackChanged(title: String, playlist: String) {
                 lastTrackTitle = title
                 lastTrackPlaylist = playlist
             }
             override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onSettingChanged(key: String, value: Any) {
-                lastSettingKey = key
-            }
+            override fun onConfigApplied(version: Int) {}
         })
 
         // Set up server that auto-authenticates and captures commands
@@ -96,16 +93,6 @@ class WebSocketCommandIntegrationTest {
     }
 
     @Test
-    fun `set command is received with correct key and value`() {
-        manager.sendSet("theme", 2)
-        Thread.sleep(500)
-        val cmd = receivedCommands.find { it.optString("cmd") == "set" }
-        assertThat(cmd).isNotNull()
-        assertThat(cmd!!.getString("key")).isEqualTo("theme")
-        assertThat(cmd.getInt("value")).isEqualTo(2)
-    }
-
-    @Test
     fun `server track_changed event is received by client`() {
         serverSocket?.send("""{"evt":"track_changed","title":"New Song","playlist":"My List"}""")
         Thread.sleep(1000)
@@ -115,13 +102,4 @@ class WebSocketCommandIntegrationTest {
         assertThat(lastTrackPlaylist).isEqualTo("My List")
     }
 
-    @Test
-    fun `server setting_changed event is received by client`() {
-        serverSocket?.send("""{"evt":"setting_changed","key":"theme","value":1}""")
-        Thread.sleep(1000)
-        ShadowLooper.idleMainLooper()
-
-        assertThat(lastSettingKey).isEqualTo("theme")
-        assertThat(manager.tvState.theme).isEqualTo(1)
-    }
 }

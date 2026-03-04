@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="connected_green">#4CAF50</color>
-    <color name="error_red">#F44336</color>
+    <!-- Surface hierarchy -->
+    <color name="mantle_background">#121212</color>
+    <color name="mantle_surface">#1E1E1E</color>
+    <color name="mantle_surface_elevated">#282828</color>
+
+    <!-- Text on surfaces -->
+    <color name="mantle_on_surface">#F0F0F0</color>
+    <color name="mantle_on_surface_muted">#B3B3B3</color>
+
+    <!-- Accent -->
+    <color name="mantle_accent">#E8A44A</color>
+    <color name="mantle_on_accent">#1A1A1A</color>
+
+    <!-- Utility -->
+    <color name="mantle_outline">#3D3D3D</color>
+    <color name="mantle_error">#CF6679</color>
+    <color name="connected_green">#66BB6A</color>
+    <color name="error_red">#CF6679</color>
 </resources>

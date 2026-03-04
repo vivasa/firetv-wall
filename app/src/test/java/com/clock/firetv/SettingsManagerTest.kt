@@ -100,34 +100,10 @@ class SettingsManagerTest {
 
     @Test
     fun `activeYoutubeUrl returns URL for valid preset index`() {
+        settings.presetCount = 3
         settings.setPresetUrl(2, "https://youtube.com/watch?v=test123")
         settings.activePreset = 2
         assertThat(settings.activeYoutubeUrl).isEqualTo("https://youtube.com/watch?v=test123")
     }
 
-    // migrateFromSingleUrl
-    @Test
-    fun `migrateFromSingleUrl moves old URL to preset 0`() {
-        settings.prefs.edit().putString("youtube_url", "https://youtube.com/old").commit()
-        settings.migrateFromSingleUrl()
-        assertThat(settings.getPresetUrl(0)).isEqualTo("https://youtube.com/old")
-        assertThat(settings.activePreset).isEqualTo(0)
-    }
-
-    @Test
-    fun `migrateFromSingleUrl is idempotent`() {
-        settings.prefs.edit().putString("youtube_url", "https://youtube.com/old").commit()
-        settings.migrateFromSingleUrl()
-        // Change preset 0 after migration
-        settings.setPresetUrl(0, "https://youtube.com/new")
-        // Second migration should be no-op
-        settings.migrateFromSingleUrl()
-        assertThat(settings.getPresetUrl(0)).isEqualTo("https://youtube.com/new")
-    }
-
-    @Test
-    fun `migrateFromSingleUrl with empty old URL does not set activePreset`() {
-        settings.migrateFromSingleUrl()
-        assertThat(settings.activePreset).isEqualTo(-1)
-    }
 }
