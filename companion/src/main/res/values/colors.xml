@@ -18,4 +18,5 @@
     <color name="mantle_error">#CF6679</color>
     <color name="connected_green">#66BB6A</color>
     <color name="error_red">#CF6679</color>
+    <color name="warning_yellow">#FFD54F</color>
 </resources>

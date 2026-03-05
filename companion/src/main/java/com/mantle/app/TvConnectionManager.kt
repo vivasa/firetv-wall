@@ -18,6 +18,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         private const val PROTOCOL_VERSION = 1
         private const val SYNC_DEBOUNCE_MS = 500L
         private const val PING_INTERVAL_MS = 20_000L
+        private const val AUTH_TIMEOUT_MS = 10_000L
     }
 
     enum class ConnectionState {
@@ -61,9 +62,18 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     private var lastPort: Int = 0
     private var lastToken: String? = null
     private var reconnectAttempt = 0
-    private var wasConnected = false
+    private var userInitiatedDisconnect = false
     private val maxReconnectAttempts = 3
     private val reconnectDelays = longArrayOf(2000, 4000, 8000)
+
+    // Auth timeout
+    private val authTimeoutRunnable = Runnable {
+        Log.w(TAG, "Authentication timed out after ${AUTH_TIMEOUT_MS}ms")
+        ConnectionEventLog.log(ConnectionEventLog.EventType.TIMEOUT, "auth_timeout")
+        webSocket?.close(1000, "auth timeout")
+        webSocket = null
+        handleDisconnect()
+    }
 
     // Debounce for config sync
     private val syncRunnable = Runnable { sendSyncConfig() }
@@ -79,6 +89,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     }
 
     private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
         .pingInterval(15, TimeUnit.SECONDS)
         .build()
 
@@ -108,11 +119,13 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     fun connect(host: String, port: Int, token: String) {
         if (state != ConnectionState.DISCONNECTED && state != ConnectionState.RECONNECTING) disconnect()
+        userInitiatedDisconnect = false
         lastHost = host
         lastPort = port
         lastToken = token
         pendingToken = token
         reconnectAttempt = 0
+        ConnectionEventLog.log(ConnectionEventLog.EventType.CONNECTING, "$host:$port")
         updateState(ConnectionState.CONNECTING)
 
         val request = Request.Builder()
@@ -123,6 +136,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket opened, authenticating")
                 updateState(ConnectionState.AUTHENTICATING)
+                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
                 val auth = JSONObject().apply {
                     put("cmd", "auth")
                     put("token", pendingToken)
@@ -141,11 +155,14 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closed: $code $reason")
+                mainHandler.removeCallbacks(authTimeoutRunnable)
                 handleDisconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket failure", t)
+                ConnectionEventLog.log(ConnectionEventLog.EventType.ERROR, "connection_failure: ${t.message}")
+                mainHandler.removeCallbacks(authTimeoutRunnable)
                 handleDisconnect()
             }
         })
@@ -153,6 +170,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     fun connectForPairing(host: String, port: Int) {
         if (state != ConnectionState.DISCONNECTED) disconnect()
+        userInitiatedDisconnect = false
         updateState(ConnectionState.CONNECTING)
 
         val request = Request.Builder()
@@ -163,6 +181,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket opened for pairing")
                 updateState(ConnectionState.AUTHENTICATING)
+                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -174,19 +193,22 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                mainHandler.removeCallbacks(authTimeoutRunnable)
                 updateState(ConnectionState.DISCONNECTED)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket failure", t)
+                mainHandler.removeCallbacks(authTimeoutRunnable)
                 updateState(ConnectionState.DISCONNECTED)
             }
         })
     }
 
     fun disconnect() {
-        wasConnected = false
+        userInitiatedDisconnect = true
         reconnectAttempt = 0
+        mainHandler.removeCallbacks(authTimeoutRunnable)
         mainHandler.removeCallbacks(syncRunnable)
         mainHandler.removeCallbacks(pingRunnable)
         mainHandler.removeCallbacksAndMessages(null)
@@ -197,15 +219,16 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     private fun handleDisconnect() {
         webSocket = null
-        if (wasConnected && reconnectAttempt < maxReconnectAttempts && lastHost != null && lastToken != null) {
+        if (!userInitiatedDisconnect && reconnectAttempt < maxReconnectAttempts && lastHost != null && lastToken != null) {
             val delay = reconnectDelays[reconnectAttempt]
             reconnectAttempt++
             Log.d(TAG, "Scheduling reconnect attempt $reconnectAttempt in ${delay}ms")
+            ConnectionEventLog.log(ConnectionEventLog.EventType.RECONNECTING, "attempt $reconnectAttempt/$maxReconnectAttempts in ${delay}ms")
             updateState(ConnectionState.RECONNECTING)
             mainHandler.postDelayed({ attemptReconnect() }, delay)
         } else {
-            wasConnected = false
             reconnectAttempt = 0
+            ConnectionEventLog.log(ConnectionEventLog.EventType.DISCONNECTED, if (userInitiatedDisconnect) "user_disconnect" else "retries_exhausted")
             updateState(ConnectionState.DISCONNECTED)
         }
     }
@@ -224,6 +247,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "Reconnect WebSocket opened, authenticating")
                 updateState(ConnectionState.AUTHENTICATING)
+                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
                 val auth = JSONObject().apply {
                     put("cmd", "auth")
                     put("token", token)
@@ -242,11 +266,13 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "Reconnect WebSocket closed: $code $reason")
+                mainHandler.removeCallbacks(authTimeoutRunnable)
                 handleDisconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "Reconnect WebSocket failure", t)
+                mainHandler.removeCallbacks(authTimeoutRunnable)
                 handleDisconnect()
             }
         })
@@ -318,23 +344,28 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             mainHandler.post {
                 when (evt) {
                     "auth_ok" -> {
-                        wasConnected = true
+                        mainHandler.removeCallbacks(authTimeoutRunnable)
+                        ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_OK)
                         reconnectAttempt = 0
                         updateState(ConnectionState.CONNECTED)
                         sendSyncConfig()
                         mainHandler.postDelayed(pingRunnable, PING_INTERVAL_MS)
                     }
                     "auth_failed" -> {
-                        Log.w(TAG, "Auth failed: ${json.optString("reason")}")
+                        mainHandler.removeCallbacks(authTimeoutRunnable)
+                        val reason = json.optString("reason", "unknown")
+                        ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_FAILED, reason)
+                        Log.w(TAG, "Auth failed: $reason")
                         disconnect()
                     }
                     "paired" -> {
+                        mainHandler.removeCallbacks(authTimeoutRunnable)
+                        ConnectionEventLog.log(ConnectionEventLog.EventType.CONNECTED, "paired")
                         lastPairedToken = json.optString("token", "")
                         lastToken = lastPairedToken
                         val pairedDeviceId = json.optString("deviceId", "")
                         val pairedDeviceName = json.optString("deviceName", "")
                         tvState = tvState.copy(deviceId = pairedDeviceId, deviceName = pairedDeviceName)
-                        wasConnected = true
                         reconnectAttempt = 0
                         updateState(ConnectionState.CONNECTED)
                         sendSyncConfig()

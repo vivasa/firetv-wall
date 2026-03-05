@@ -55,6 +55,13 @@ class HomeFragment : Fragment() {
         switchPlayerVisible = view.findViewById(R.id.switchPlayerVisible)
         dropdownPlayerSize = view.findViewById(R.id.dropdownPlayerSize)
 
+        view.findViewById<View>(R.id.btnConnectionLog).setOnClickListener {
+            parentFragmentManager.beginTransaction()
+                .replace(R.id.fragmentContainer, ConnectionDiagnosticsFragment())
+                .addToBackStack(null)
+                .commit()
+        }
+
         setupDropdowns()
         setupSwitches()
         setupTimezonePickers()

@@ -146,9 +146,10 @@ class CompanionWebSocket(
         private val timeoutChecker = Runnable { checkTimeout() }
 
         override fun onOpen() {
-            Log.i(TAG, "WebSocket client connected")
+            Log.i(TAG, "[CompanionWS] event=client_connected")
             // Disconnect existing client
             activeSocket?.let { existing ->
+                Log.i(TAG, "[CompanionWS] event=client_replaced detail=old_client_closed")
                 try {
                     existing.send(JSONObject().apply {
                         put("evt", "disconnected")
@@ -162,7 +163,7 @@ class CompanionWebSocket(
         }
 
         override fun onClose(code: WebSocketFrame.CloseCode?, reason: String?, initiatedByRemote: Boolean) {
-            Log.i(TAG, "WebSocket client disconnected: $reason")
+            Log.i(TAG, "[CompanionWS] event=client_disconnected detail=$reason")
             if (activeSocket == this) {
                 activeSocket = null
                 if (authenticated) {
@@ -188,7 +189,9 @@ class CompanionWebSocket(
             }
         }
 
-        override fun onPong(pong: WebSocketFrame?) {}
+        override fun onPong(pong: WebSocketFrame?) {
+            lastMessageTime = System.currentTimeMillis()
+        }
 
         override fun onException(exception: IOException) {
             Log.w(TAG, "WebSocket exception", exception)
@@ -304,6 +307,7 @@ class CompanionWebSocket(
 
         private fun handleAuth(token: String) {
             if (isValidToken(token)) {
+                Log.i(TAG, "[CompanionWS] event=auth_ok detail=token_validated")
                 authenticated = true
                 sendEvt(JSONObject().apply {
                     put("evt", "auth_ok")
@@ -318,6 +322,7 @@ class CompanionWebSocket(
                     put("data", buildStateJson())
                 })
             } else {
+                Log.i(TAG, "[CompanionWS] event=auth_failed detail=invalid_token")
                 sendEvt(JSONObject().apply {
                     put("evt", "auth_failed")
                     put("reason", "invalid_token")
@@ -363,7 +368,7 @@ class CompanionWebSocket(
                 try {
                     send(text)
                 } catch (e: IOException) {
-                    Log.w(TAG, "Failed to send", e)
+                    Log.w(TAG, "[CompanionWS] event=send_error detail=${e.message}")
                 }
             }
         }
@@ -374,7 +379,7 @@ class CompanionWebSocket(
 
         private fun checkTimeout() {
             if (System.currentTimeMillis() - lastMessageTime > TIMEOUT_MS) {
-                Log.i(TAG, "Client timed out")
+                Log.i(TAG, "[CompanionWS] event=timeout detail=inactive_30s")
                 try {
                     close(WebSocketFrame.CloseCode.GoingAway, "timeout", false)
                 } catch (e: Exception) { /* ignore */ }
