@@ -66,13 +66,14 @@ The Fire TV's GATT server SHALL fragment outgoing event notifications and reasse
 - **AND** processes the complete JSON command
 
 ### Requirement: Single client management
-The Fire TV's BLE GATT server SHALL allow only one authenticated client at a time. If a new client authenticates while one is already connected, the previous client SHALL be disconnected, matching the WebSocket server's behavior.
+The Fire TV's BLE GATT server SHALL implement `ClientTransport` and allow only one authenticated client at a time. If a new client authenticates while one is already connected, the previous client SHALL be disconnected, matching the WebSocket server's behavior. Connection lifecycle events SHALL be reported through the `ClientTransport.Listener` interface rather than directly to `CompanionCommandHandler.Listener`.
 
 #### Scenario: Second client replaces first
 - **WHEN** a second companion app connects and authenticates over BLE
 - **AND** a first companion is already authenticated
 - **THEN** the first client's BLE connection is closed
-- **AND** the second client becomes the active client
+- **AND** `ClientTransport.Listener.onClientDisconnected` is called for the first client
+- **AND** `ClientTransport.Listener.onClientConnected` is called for the second client
 
 ### Requirement: BLE permissions (Fire TV)
 The Fire TV app's manifest SHALL declare `BLUETOOTH_ADVERTISE` and `BLUETOOTH_CONNECT` permissions for Android 12+ (API 31+). For older Fire OS versions, it SHALL declare `BLUETOOTH` and `BLUETOOTH_ADMIN`.

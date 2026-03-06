@@ -9,7 +9,11 @@
       "Bash(head -20 build.gradle*)",
       "Bash(./gradlew :protocol:build)",
       "Bash(./gradlew :app:compileDebugKotlin :mantle:compileDebugKotlin)",
-      "Bash(./gradlew test)"
+      "Bash(./gradlew test)",
+      "Bash(./gradlew build)",
+      "Bash(./gradlew :app:build :protocol:build)",
+      "Read(//usr/local/**)",
+      "Bash(adb -s f0e3a447 shell getprop ro.product.model)"
     ]
   }
 }
