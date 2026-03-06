@@ -125,13 +125,13 @@
                         app:iconTint="@color/mantle_on_surface_muted" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnStop"
+                        android:id="@+id/btnPlayPause"
                         style="@style/Widget.Material3.Button.IconButton.Filled.Tonal"
                         android:layout_width="56dp"
                         android:layout_height="56dp"
                         android:backgroundTint="@color/mantle_accent"
-                        android:contentDescription="Stop"
-                        app:icon="@drawable/ic_stop"
+                        android:contentDescription="Play/Pause"
+                        app:icon="@drawable/ic_play"
                         app:iconTint="@color/mantle_on_accent" />
 
                     <com.google.android.material.button.MaterialButton

@@ -249,6 +249,18 @@ class YouTubePlayerManager(
         }
     }
 
+    fun pause() {
+        player?.pause()
+    }
+
+    fun resume() {
+        player?.play()
+    }
+
+    fun currentTrackInfo(): Pair<String, String?>? {
+        return currentVideoTitle?.let { Pair(it, currentPlaylistTitle) }
+    }
+
     fun playPrevious() {
         if (playlistVideoUrls.isEmpty()) return
 

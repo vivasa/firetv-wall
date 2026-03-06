@@ -1,5 +1,6 @@
 package com.mantle.app
 
+import android.bluetooth.BluetoothDevice
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,16 +14,26 @@ class DeviceAdapter(
     private val onLongPress: (DeviceItem) -> Unit
 ) : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
 
+    enum class TransportType { NSD, BLE }
+
     data class DeviceItem(
         val deviceId: String,
         val deviceName: String,
         val host: String,
         val port: Int,
         val isPaired: Boolean,
-        val storedToken: String? = null
+        val storedToken: String? = null,
+        val transportType: TransportType = TransportType.NSD,
+        val bleDevice: BluetoothDevice? = null
     )
 
     private val items = mutableListOf<DeviceItem>()
+    private var connectedDeviceId: String? = null
+
+    fun setConnectedDeviceId(id: String?) {
+        connectedDeviceId = id
+        notifyDataSetChanged()
+    }
 
     fun setItems(newItems: List<DeviceItem>) {
         items.clear()
@@ -38,18 +49,32 @@ class DeviceAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = items[position]
         holder.name.text = item.deviceName
-        holder.address.text = "${item.host}:${item.port}"
+        val addressText = if (item.transportType == TransportType.BLE) "BLE" else "${item.host}:${item.port}"
+        holder.address.text = addressText
         val context = holder.itemView.context
         if (item.isPaired) {
-            holder.badge.text = "Paired"
+            val transport = if (item.transportType == TransportType.BLE) "BLE" else "WiFi"
+            holder.badge.text = "Paired · $transport"
             holder.badge.setTextColor(ContextCompat.getColor(context, R.color.connected_green))
-            holder.action.text = "Connect"
+            if (item.deviceId == connectedDeviceId) {
+                holder.action.text = "Connected"
+                holder.action.isEnabled = false
+                holder.action.alpha = 0.5f
+            } else {
+                holder.action.text = "Connect"
+                holder.action.isEnabled = true
+                holder.action.alpha = 1.0f
+                holder.action.setOnClickListener { onAction(item) }
+            }
         } else {
-            holder.badge.text = "New"
+            val transport = if (item.transportType == TransportType.BLE) "BLE" else "WiFi"
+            holder.badge.text = transport
             holder.badge.setTextColor(ContextCompat.getColor(context, R.color.mantle_on_surface_muted))
             holder.action.text = "Pair"
+            holder.action.isEnabled = true
+            holder.action.alpha = 1.0f
+            holder.action.setOnClickListener { onAction(item) }
         }
-        holder.action.setOnClickListener { onAction(item) }
         holder.itemView.setOnLongClickListener {
             onLongPress(item)
             true

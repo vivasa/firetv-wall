@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: NSD service registration
 The system SHALL register an NSD (Network Service Discovery) service on the local network so that companion apps can discover the Fire TV without manual IP entry. BLE advertising SHALL run alongside NSD registration when the hardware supports it, providing two parallel discovery mechanisms.
@@ -31,6 +31,8 @@ The system SHALL register an NSD (Network Service Discovery) service on the loca
 - **AND** the WebSocket server is still accessible via manual IP entry
 - **AND** BLE advertising continues independently if supported
 - **AND** the failure is logged but does not crash the app
+
+## ADDED Requirements
 
 ### Requirement: Unified device discovery list
 The companion app's device discovery screen SHALL show devices discovered via NSD and BLE in a single unified list. Each device entry SHALL indicate its transport type with a badge ("WiFi" for NSD, "BLE" for Bluetooth). If the same device is discovered via both NSD and BLE, it SHALL appear as a single entry with both transport options available.

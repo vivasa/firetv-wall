@@ -1,15 +1,11 @@
 package com.mantle.app
 
+import android.bluetooth.BluetoothDevice
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
@@ -23,6 +19,10 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     enum class ConnectionState {
         DISCONNECTED, CONNECTING, AUTHENTICATING, CONNECTED, RECONNECTING
+    }
+
+    enum class TransportType {
+        WEBSOCKET, BLE
     }
 
     data class TvState(
@@ -54,13 +54,18 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     private val listeners = mutableListOf<EventListener>()
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var webSocket: WebSocket? = null
+    private var transport: CompanionTransport? = null
     private var pendingToken: String? = null
+
+    // App context for BLE transport
+    var appContext: Context? = null
 
     // Reconnection state
     private var lastHost: String? = null
     private var lastPort: Int = 0
     private var lastToken: String? = null
+    private var lastTransportType: TransportType = TransportType.WEBSOCKET
+    private var lastBleDevice: BluetoothDevice? = null
     private var reconnectAttempt = 0
     private var userInitiatedDisconnect = false
     private val maxReconnectAttempts = 3
@@ -70,8 +75,8 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     private val authTimeoutRunnable = Runnable {
         Log.w(TAG, "Authentication timed out after ${AUTH_TIMEOUT_MS}ms")
         ConnectionEventLog.log(ConnectionEventLog.EventType.TIMEOUT, "auth_timeout")
-        webSocket?.close(1000, "auth timeout")
-        webSocket = null
+        transport?.disconnect()
+        transport = null
         handleDisconnect()
     }
 
@@ -88,10 +93,40 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         }
     }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .pingInterval(15, TimeUnit.SECONDS)
-        .build()
+    private val transportListener = object : CompanionTransport.Listener {
+        override fun onConnected() {
+            Log.d(TAG, "Transport connected, authenticating")
+            updateState(ConnectionState.AUTHENTICATING)
+            mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
+            if (pendingToken != null) {
+                val auth = JSONObject().apply {
+                    put("cmd", "auth")
+                    put("token", pendingToken)
+                    put("protocolVersion", PROTOCOL_VERSION)
+                }
+                transport?.send(auth)
+            }
+        }
+
+        override fun onMessage(text: String) {
+            handleMessage(text)
+        }
+
+        override fun onDisconnected(reason: String) {
+            Log.d(TAG, "Transport disconnected: $reason")
+            mainHandler.removeCallbacks(authTimeoutRunnable)
+            transport = null
+            handleDisconnect()
+        }
+
+        override fun onError(error: String) {
+            Log.e(TAG, "Transport error: $error")
+            ConnectionEventLog.log(ConnectionEventLog.EventType.ERROR, error)
+            mainHandler.removeCallbacks(authTimeoutRunnable)
+            transport = null
+            handleDisconnect()
+        }
+    }
 
     fun addListener(listener: EventListener) {
         listeners.add(listener)
@@ -117,92 +152,109 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         }
     }
 
-    fun connect(host: String, port: Int, token: String) {
+    fun connect(host: String, port: Int, token: String, transportType: TransportType = TransportType.WEBSOCKET) {
         if (state != ConnectionState.DISCONNECTED && state != ConnectionState.RECONNECTING) disconnect()
         userInitiatedDisconnect = false
         lastHost = host
         lastPort = port
         lastToken = token
+        lastTransportType = transportType
         pendingToken = token
         reconnectAttempt = 0
         ConnectionEventLog.log(ConnectionEventLog.EventType.CONNECTING, "$host:$port")
         updateState(ConnectionState.CONNECTING)
 
-        val request = Request.Builder()
-            .url("ws://$host:$port")
-            .build()
-
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(TAG, "WebSocket opened, authenticating")
-                updateState(ConnectionState.AUTHENTICATING)
-                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
-                val auth = JSONObject().apply {
-                    put("cmd", "auth")
-                    put("token", pendingToken)
-                    put("protocolVersion", PROTOCOL_VERSION)
-                }
-                webSocket.send(auth.toString())
-            }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                handleMessage(text)
-            }
-
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(1000, null)
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket closed: $code $reason")
-                mainHandler.removeCallbacks(authTimeoutRunnable)
-                handleDisconnect()
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket failure", t)
-                ConnectionEventLog.log(ConnectionEventLog.EventType.ERROR, "connection_failure: ${t.message}")
-                mainHandler.removeCallbacks(authTimeoutRunnable)
-                handleDisconnect()
-            }
-        })
+        val t = createTransport(transportType, host, port)
+        t.setListener(transportListener)
+        transport = t
+        t.connect()
     }
 
-    fun connectForPairing(host: String, port: Int) {
-        if (state != ConnectionState.DISCONNECTED) disconnect()
+    fun connectBle(device: BluetoothDevice, token: String) {
+        if (state != ConnectionState.DISCONNECTED && state != ConnectionState.RECONNECTING) disconnect()
         userInitiatedDisconnect = false
+        lastBleDevice = device
+        lastToken = token
+        lastTransportType = TransportType.BLE
+        pendingToken = token
+        reconnectAttempt = 0
+        ConnectionEventLog.log(ConnectionEventLog.EventType.CONNECTING, "BLE:${device.address}")
         updateState(ConnectionState.CONNECTING)
 
-        val request = Request.Builder()
-            .url("ws://$host:$port")
-            .build()
+        val ctx = appContext ?: throw IllegalStateException("appContext must be set for BLE")
+        val t = BleTransport(ctx, device)
+        t.setListener(transportListener)
+        transport = t
+        t.connect()
+    }
 
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(TAG, "WebSocket opened for pairing")
+    fun connectBleForPairing(device: BluetoothDevice) {
+        if (state != ConnectionState.DISCONNECTED) disconnect()
+        userInitiatedDisconnect = false
+        lastBleDevice = device
+        lastTransportType = TransportType.BLE
+        pendingToken = null
+        updateState(ConnectionState.CONNECTING)
+
+        val ctx = appContext ?: throw IllegalStateException("appContext must be set for BLE")
+        val t = BleTransport(ctx, device)
+        t.setListener(object : CompanionTransport.Listener {
+            override fun onConnected() {
+                Log.d(TAG, "BLE transport opened for pairing")
+                updateState(ConnectionState.AUTHENTICATING)
+                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
+            }
+            override fun onMessage(text: String) { handleMessage(text) }
+            override fun onDisconnected(reason: String) {
+                mainHandler.removeCallbacks(authTimeoutRunnable)
+                transport = null
+                updateState(ConnectionState.DISCONNECTED)
+            }
+            override fun onError(error: String) {
+                Log.e(TAG, "BLE pairing error: $error")
+                mainHandler.removeCallbacks(authTimeoutRunnable)
+                transport = null
+                updateState(ConnectionState.DISCONNECTED)
+            }
+        })
+        transport = t
+        t.connect()
+    }
+
+    fun connectForPairing(host: String, port: Int, transportType: TransportType = TransportType.WEBSOCKET) {
+        if (state != ConnectionState.DISCONNECTED) disconnect()
+        userInitiatedDisconnect = false
+        pendingToken = null
+        lastTransportType = transportType
+        updateState(ConnectionState.CONNECTING)
+
+        val t = createTransport(transportType, host, port)
+        t.setListener(object : CompanionTransport.Listener {
+            override fun onConnected() {
+                Log.d(TAG, "Transport opened for pairing")
                 updateState(ConnectionState.AUTHENTICATING)
                 mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
             }
 
-            override fun onMessage(webSocket: WebSocket, text: String) {
+            override fun onMessage(text: String) {
                 handleMessage(text)
             }
 
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(1000, null)
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            override fun onDisconnected(reason: String) {
                 mainHandler.removeCallbacks(authTimeoutRunnable)
+                transport = null
                 updateState(ConnectionState.DISCONNECTED)
             }
 
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket failure", t)
+            override fun onError(error: String) {
+                Log.e(TAG, "Pairing transport error: $error")
                 mainHandler.removeCallbacks(authTimeoutRunnable)
+                transport = null
                 updateState(ConnectionState.DISCONNECTED)
             }
         })
+        transport = t
+        t.connect()
     }
 
     fun disconnect() {
@@ -212,14 +264,15 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         mainHandler.removeCallbacks(syncRunnable)
         mainHandler.removeCallbacks(pingRunnable)
         mainHandler.removeCallbacksAndMessages(null)
-        webSocket?.close(1000, "user disconnect")
-        webSocket = null
+        transport?.disconnect()
+        transport = null
         updateState(ConnectionState.DISCONNECTED)
     }
 
     private fun handleDisconnect() {
-        webSocket = null
-        if (!userInitiatedDisconnect && reconnectAttempt < maxReconnectAttempts && lastHost != null && lastToken != null) {
+        transport = null
+        val canReconnect = lastToken != null && (lastHost != null || lastBleDevice != null)
+        if (!userInitiatedDisconnect && reconnectAttempt < maxReconnectAttempts && canReconnect) {
             val delay = reconnectDelays[reconnectAttempt]
             reconnectAttempt++
             Log.d(TAG, "Scheduling reconnect attempt $reconnectAttempt in ${delay}ms")
@@ -234,48 +287,25 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     }
 
     private fun attemptReconnect() {
-        val host = lastHost ?: return
         val token = lastToken ?: return
-        Log.d(TAG, "Reconnect attempt $reconnectAttempt/$maxReconnectAttempts to $host:$lastPort")
-
-        val request = Request.Builder()
-            .url("ws://$host:$lastPort")
-            .build()
-
         pendingToken = token
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(TAG, "Reconnect WebSocket opened, authenticating")
-                updateState(ConnectionState.AUTHENTICATING)
-                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
-                val auth = JSONObject().apply {
-                    put("cmd", "auth")
-                    put("token", token)
-                    put("protocolVersion", PROTOCOL_VERSION)
-                }
-                webSocket.send(auth.toString())
-            }
 
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                handleMessage(text)
-            }
-
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(1000, null)
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "Reconnect WebSocket closed: $code $reason")
-                mainHandler.removeCallbacks(authTimeoutRunnable)
-                handleDisconnect()
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "Reconnect WebSocket failure", t)
-                mainHandler.removeCallbacks(authTimeoutRunnable)
-                handleDisconnect()
-            }
-        })
+        if (lastTransportType == TransportType.BLE) {
+            val device = lastBleDevice ?: return
+            val ctx = appContext ?: return
+            Log.d(TAG, "BLE reconnect attempt $reconnectAttempt/$maxReconnectAttempts to ${device.address}")
+            val t = BleTransport(ctx, device)
+            t.setListener(transportListener)
+            transport = t
+            t.connect()
+        } else {
+            val host = lastHost ?: return
+            Log.d(TAG, "Reconnect attempt $reconnectAttempt/$maxReconnectAttempts to $host:$lastPort")
+            val t = createTransport(lastTransportType, host, lastPort)
+            t.setListener(transportListener)
+            transport = t
+            t.connect()
+        }
     }
 
     fun sendPairRequest() {
@@ -298,6 +328,14 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     fun sendStop() {
         send(JSONObject().apply { put("cmd", "stop") })
+    }
+
+    fun sendPause() {
+        send(JSONObject().apply { put("cmd", "pause") })
+    }
+
+    fun sendResume() {
+        send(JSONObject().apply { put("cmd", "resume") })
     }
 
     fun sendSeek(offsetSec: Int) {
@@ -334,7 +372,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     }
 
     private fun send(json: JSONObject) {
-        webSocket?.send(json.toString()) ?: Log.w(TAG, "Cannot send, not connected")
+        transport?.send(json) ?: Log.w(TAG, "Cannot send, not connected")
     }
 
     internal fun handleMessage(text: String) {
@@ -346,6 +384,11 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
                     "auth_ok" -> {
                         mainHandler.removeCallbacks(authTimeoutRunnable)
                         ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_OK)
+                        val authDeviceId = json.optString("deviceId", "")
+                        val authDeviceName = json.optString("deviceName", "")
+                        if (authDeviceId.isNotEmpty()) {
+                            tvState = tvState.copy(deviceId = authDeviceId, deviceName = authDeviceName)
+                        }
                         reconnectAttempt = 0
                         updateState(ConnectionState.CONNECTED)
                         sendSyncConfig()
@@ -384,9 +427,23 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
                         listeners.forEach { it.onTrackChanged(title, playlist) }
                     }
                     "playback_state" -> {
-                        val playing = json.optBoolean("playing", false)
+                        val playing = json.optBoolean("isPlaying", false)
                         tvState = tvState.copy(isPlaying = playing)
                         listeners.forEach { it.onPlaybackStateChanged(playing) }
+                    }
+                    "state" -> {
+                        val data = json.optJSONObject("data") ?: return@post
+                        val stateDeviceId = data.optString("deviceId", "")
+                        val stateDeviceName = data.optString("deviceName", "")
+                        if (stateDeviceId.isNotEmpty()) {
+                            tvState = tvState.copy(deviceId = stateDeviceId, deviceName = stateDeviceName)
+                        }
+                        val activePreset = data.optInt("activePreset", -1)
+                        if (activePreset >= 0) {
+                            val playing = activePreset >= 0
+                            tvState = tvState.copy(isPlaying = playing)
+                            listeners.forEach { it.onPlaybackStateChanged(playing) }
+                        }
                     }
                     "pong" -> { /* keepalive, ignore */ }
                     "error" -> {
@@ -396,6 +453,13 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse message: $text", e)
+        }
+    }
+
+    private fun createTransport(type: TransportType, host: String, port: Int): CompanionTransport {
+        return when (type) {
+            TransportType.WEBSOCKET -> WebSocketTransport(host, port)
+            TransportType.BLE -> throw UnsupportedOperationException("BLE transport not yet implemented")
         }
     }
 
