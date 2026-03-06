@@ -12,7 +12,7 @@ import org.json.JSONObject
 class CompanionCommandHandler(
     private val settings: SettingsManager,
     private val deviceIdentity: DeviceIdentity
-) {
+) : ClientTransport.Listener {
     companion object {
         private const val TAG = "CmdHandler"
         private const val PIN_VALIDITY_MS = 60_000L
@@ -31,11 +31,6 @@ class CompanionCommandHandler(
         }
     }
 
-    interface TransportSink {
-        fun sendEvent(json: JSONObject)
-        fun closeConnection(reason: String)
-    }
-
     interface Listener {
         fun onCompanionConnected()
         fun onCompanionDisconnected()
@@ -52,6 +47,7 @@ class CompanionCommandHandler(
 
     var listener: Listener? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var activeTransport: ClientTransport? = null
 
     // Pairing state
     private var currentPin: String? = null
@@ -59,41 +55,78 @@ class CompanionCommandHandler(
     private var failedAttempts = 0
     private var rateLimitUntil: Long = 0
 
-    fun handleCommand(cmd: String, json: JSONObject, sink: TransportSink, isAuthenticated: Boolean): Boolean {
-        return when (cmd) {
+    // -- ClientTransport.Listener --
+
+    override fun onClientConnected(transport: ClientTransport) {
+        Log.i(TAG, "client_connected")
+        activeTransport?.let { existing ->
+            if (existing !== transport) {
+                Log.i(TAG, "replacing previous client")
+                existing.closeConnection("replaced")
+                mainHandler.post { listener?.onCompanionDisconnected() }
+            }
+        }
+    }
+
+    override fun onMessageReceived(message: String, transport: ClientTransport) {
+        try {
+            val json = JSONObject(message)
+            val cmd = json.optString(ProtocolKeys.CMD, "")
+            handleCommand(cmd, json, transport)
+        } catch (e: Exception) {
+            Log.w(TAG, "Invalid message: $message", e)
+            transport.sendEvent(JSONObject().apply {
+                put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
+                put(ProtocolKeys.MESSAGE, "invalid message format")
+            })
+        }
+    }
+
+    override fun onClientDisconnected(transport: ClientTransport, reason: String) {
+        Log.i(TAG, "client_disconnected: $reason")
+        if (activeTransport === transport) {
+            activeTransport = null
+            mainHandler.post { listener?.onCompanionDisconnected() }
+        }
+    }
+
+    fun broadcastEvent(json: JSONObject) {
+        activeTransport?.sendEvent(json)
+    }
+
+    // -- Command routing --
+
+    private fun handleCommand(cmd: String, json: JSONObject, transport: ClientTransport) {
+        when (cmd) {
             ProtocolCommands.PING -> {
-                sink.sendEvent(JSONObject().apply { put(ProtocolKeys.EVT, ProtocolEvents.PONG) })
-                false // no auth change
+                transport.sendEvent(JSONObject().apply { put(ProtocolKeys.EVT, ProtocolEvents.PONG) })
             }
             ProtocolCommands.PAIR_REQUEST -> {
-                handlePairRequest(sink)
-                false
+                handlePairRequest(transport)
             }
             ProtocolCommands.PAIR_CONFIRM -> {
-                handlePairConfirm(json.optString(ProtocolKeys.PIN, ""), sink)
+                handlePairConfirm(json.optString(ProtocolKeys.PIN, ""), transport)
             }
             ProtocolCommands.AUTH -> {
-                handleAuth(json.optString(ProtocolKeys.TOKEN, ""), sink)
+                handleAuth(json.optString(ProtocolKeys.TOKEN, ""), transport)
             }
             else -> {
-                if (!isAuthenticated) {
-                    sink.sendEvent(JSONObject().apply {
+                if (activeTransport !== transport) {
+                    transport.sendEvent(JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
                         put(ProtocolKeys.MESSAGE, "not authenticated")
                     })
-                    false
                 } else {
-                    handleAuthenticatedCommand(cmd, json, sink)
-                    false
+                    handleAuthenticatedCommand(cmd, json, transport)
                 }
             }
         }
     }
 
-    private fun handlePairRequest(sink: TransportSink) {
+    private fun handlePairRequest(transport: ClientTransport) {
         val now = System.currentTimeMillis()
         if (now < rateLimitUntil) {
-            sink.sendEvent(JSONObject().apply {
+            transport.sendEvent(JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                 put(ProtocolKeys.REASON, ProtocolEvents.RATE_LIMITED)
             })
@@ -115,24 +148,23 @@ class CompanionCommandHandler(
         }, PIN_VALIDITY_MS)
     }
 
-    /** Returns true if authentication state changed to authenticated */
-    private fun handlePairConfirm(pin: String, sink: TransportSink): Boolean {
+    private fun handlePairConfirm(pin: String, transport: ClientTransport) {
         val now = System.currentTimeMillis()
         if (now < rateLimitUntil) {
-            sink.sendEvent(JSONObject().apply {
+            transport.sendEvent(JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                 put(ProtocolKeys.REASON, ProtocolEvents.RATE_LIMITED)
             })
-            return false
+            return
         }
 
         if (currentPin == null || now > pinExpiresAt) {
-            sink.sendEvent(JSONObject().apply {
+            transport.sendEvent(JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                 put(ProtocolKeys.REASON, ProtocolEvents.PIN_EXPIRED)
             })
             mainHandler.post { listener?.onDismissPin() }
-            return false
+            return
         }
 
         if (pin != currentPin) {
@@ -140,26 +172,27 @@ class CompanionCommandHandler(
             if (failedAttempts >= MAX_PIN_ATTEMPTS) {
                 rateLimitUntil = now + RATE_LIMIT_COOLDOWN_MS
                 currentPin = null
-                sink.sendEvent(JSONObject().apply {
+                transport.sendEvent(JSONObject().apply {
                     put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                     put(ProtocolKeys.REASON, ProtocolEvents.RATE_LIMITED)
                 })
                 mainHandler.post { listener?.onDismissPin() }
             } else {
-                sink.sendEvent(JSONObject().apply {
+                transport.sendEvent(JSONObject().apply {
                     put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                     put(ProtocolKeys.REASON, ProtocolEvents.INVALID_PIN)
                 })
             }
-            return false
+            return
         }
 
         // PIN correct — issue token
         currentPin = null
         val token = generateToken()
         storeToken(token)
+        activeTransport = transport
 
-        sink.sendEvent(JSONObject().apply {
+        transport.sendEvent(JSONObject().apply {
             put(ProtocolKeys.EVT, ProtocolEvents.PAIRED)
             put(ProtocolKeys.TOKEN, token)
             put(ProtocolKeys.DEVICE_ID, deviceIdentity.deviceId)
@@ -172,55 +205,51 @@ class CompanionCommandHandler(
         }
 
         // Send state dump
-        sink.sendEvent(JSONObject().apply {
+        transport.sendEvent(JSONObject().apply {
             put(ProtocolKeys.EVT, ProtocolEvents.STATE)
             put(ProtocolKeys.DATA, buildStateJson())
         })
-
-        return true
     }
 
-    /** Returns true if authentication succeeded */
-    private fun handleAuth(token: String, sink: TransportSink): Boolean {
+    private fun handleAuth(token: String, transport: ClientTransport) {
         if (isValidToken(token)) {
             Log.i(TAG, "auth_ok: token_validated")
-            sink.sendEvent(JSONObject().apply {
+            activeTransport = transport
+            transport.sendEvent(JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.AUTH_OK)
                 put(ProtocolKeys.DEVICE_ID, deviceIdentity.deviceId)
                 put(ProtocolKeys.DEVICE_NAME, deviceIdentity.deviceName)
             })
             mainHandler.post { listener?.onCompanionConnected() }
 
-            sink.sendEvent(JSONObject().apply {
+            transport.sendEvent(JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.STATE)
                 put(ProtocolKeys.DATA, buildStateJson())
             })
-            return true
         } else {
             Log.i(TAG, "auth_failed: invalid_token")
-            sink.sendEvent(JSONObject().apply {
+            transport.sendEvent(JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                 put(ProtocolKeys.REASON, "invalid_token")
             })
-            return false
         }
     }
 
-    private fun handleAuthenticatedCommand(cmd: String, json: JSONObject, sink: TransportSink) {
+    private fun handleAuthenticatedCommand(cmd: String, json: JSONObject, transport: ClientTransport) {
         mainHandler.post {
             when (cmd) {
                 ProtocolCommands.PLAY -> listener?.onPlayPreset(json.optInt(ProtocolKeys.PRESET_INDEX, -1))
                 ProtocolCommands.STOP -> listener?.onStopPlayback()
                 ProtocolCommands.PAUSE -> {
                     listener?.onPausePlayback()
-                    sink.sendEvent(JSONObject().apply {
+                    transport.sendEvent(JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
                         put(ProtocolKeys.IS_PLAYING, false)
                     })
                 }
                 ProtocolCommands.RESUME -> {
                     listener?.onResumePlayback()
-                    sink.sendEvent(JSONObject().apply {
+                    transport.sendEvent(JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
                         put(ProtocolKeys.IS_PLAYING, true)
                     })
@@ -231,19 +260,19 @@ class CompanionCommandHandler(
                     val config = json.optJSONObject(ProtocolKeys.CONFIG) ?: return@post
                     listener?.onSyncConfig(config)
                     val version = config.optInt(ProtocolKeys.VERSION, -1)
-                    sink.sendEvent(JSONObject().apply {
+                    transport.sendEvent(JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.CONFIG_APPLIED)
                         put(ProtocolKeys.VERSION, version)
                     })
                 }
                 ProtocolCommands.GET_STATE -> {
-                    sink.sendEvent(JSONObject().apply {
+                    transport.sendEvent(JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.STATE)
                         put(ProtocolKeys.DATA, buildStateJson())
                     })
                 }
                 else -> {
-                    sink.sendEvent(JSONObject().apply {
+                    transport.sendEvent(JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
                         put(ProtocolKeys.MESSAGE, "unknown command: $cmd")
                     })

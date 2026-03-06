@@ -488,7 +488,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     override fun onTrackChanged(videoTitle: String?, playlistTitle: String?) {
         if (videoTitle == null) {
             nowPlayingLabel.visibility = View.GONE
-            companionWs?.sendEvent(org.json.JSONObject().apply {
+            commandHandler.broadcastEvent(org.json.JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
                 put(ProtocolKeys.IS_PLAYING, false)
             })
@@ -499,7 +499,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         nowPlayingLabel.visibility = if (youtubeContainer.visibility == View.VISIBLE) View.VISIBLE else View.GONE
 
         // Broadcast to companion
-        companionWs?.sendEvent(org.json.JSONObject().apply {
+        commandHandler.broadcastEvent(org.json.JSONObject().apply {
             put(ProtocolKeys.EVT, ProtocolEvents.TRACK_CHANGED)
             put(ProtocolKeys.TITLE, videoTitle)
             put(ProtocolKeys.PLAYLIST, playlistTitle ?: "")
@@ -513,12 +513,12 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 showLinkIndicator()
                 // Send current track info to newly connected companion
                 youtubeMgr.currentTrackInfo()?.let { (title, playlist) ->
-                    companionWs?.sendEvent(org.json.JSONObject().apply {
+                    commandHandler.broadcastEvent(org.json.JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.TRACK_CHANGED)
                         put(ProtocolKeys.TITLE, title)
                         put(ProtocolKeys.PLAYLIST, playlist ?: "")
                     })
-                    companionWs?.sendEvent(org.json.JSONObject().apply {
+                    commandHandler.broadcastEvent(org.json.JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
                         put(ProtocolKeys.IS_PLAYING, true)
                     })
@@ -558,7 +558,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
             }
         }
 
-        val ws = CompanionWebSocket(commandHandler, ProtocolConfig.DEFAULT_PORT)
+        val ws = CompanionWebSocket(ProtocolConfig.DEFAULT_PORT)
+        ws.transportListener = commandHandler
         try {
             ws.startServer()
             Thread.sleep(200) // NanoHTTPD binds on background thread
@@ -568,7 +569,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
             } else {
                 ws.stop()
                 android.util.Log.e("CompanionWS", "Port ${ProtocolConfig.DEFAULT_PORT} bind failed, trying ${ProtocolConfig.FALLBACK_PORT}")
-                val fallback = CompanionWebSocket(commandHandler, ProtocolConfig.FALLBACK_PORT)
+                val fallback = CompanionWebSocket(ProtocolConfig.FALLBACK_PORT)
+                fallback.transportListener = commandHandler
                 fallback.startServer()
                 Thread.sleep(200)
                 if (fallback.isAlive) {
@@ -715,7 +717,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     }
 
     private fun startBlePeripheral() {
-        val ble = BlePeripheralManager(this, commandHandler, deviceIdentity)
+        val ble = BlePeripheralManager(this, deviceIdentity)
+        ble.transportListener = commandHandler
         if (ble.init()) {
             blePeripheral = ble
         }

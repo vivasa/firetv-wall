@@ -98,7 +98,8 @@ class CompanionWebSocketTest {
 
         commandHandler = CompanionCommandHandler(settings, identity)
         commandHandler.listener = testListener
-        server = CompanionWebSocket(commandHandler, 0)
+        server = CompanionWebSocket(0)
+        server.transportListener = commandHandler
         server.startServer()
     }
 

@@ -12,7 +12,6 @@ import java.io.IOException
 import java.util.concurrent.Executors
 
 class CompanionWebSocket(
-    private val commandHandler: CompanionCommandHandler,
     port: Int
 ) : NanoWSD(port) {
 
@@ -20,6 +19,8 @@ class CompanionWebSocket(
         private const val TAG = "CompanionWS"
         private const val TIMEOUT_MS = 30_000L
     }
+
+    var transportListener: ClientTransport.Listener? = null
 
     val actualPort: Int get() = listeningPort
 
@@ -35,35 +36,31 @@ class CompanionWebSocket(
         return CompanionSocket(handshake)
     }
 
-    fun sendEvent(json: JSONObject) {
-        val socket = activeSocket ?: return
-        val text = json.toString()
-        sendExecutor.execute {
-            try {
-                socket.send(text)
-            } catch (e: IOException) {
-                Log.w(TAG, "Failed to send event", e)
-            }
-        }
-    }
+    inner class CompanionSocket(handshake: NanoHTTPD.IHTTPSession) : WebSocket(handshake), ClientTransport {
 
-    inner class CompanionSocket(handshake: NanoHTTPD.IHTTPSession) : WebSocket(handshake) {
-
-        private var authenticated = false
         private var lastMessageTime = System.currentTimeMillis()
         private val timeoutChecker = Runnable { checkTimeout() }
 
-        private val sink = object : CompanionCommandHandler.TransportSink {
-            override fun sendEvent(json: JSONObject) {
-                sendEvt(json)
-            }
+        // -- ClientTransport --
 
-            override fun closeConnection(reason: String) {
+        override fun sendEvent(json: JSONObject) {
+            val text = json.toString()
+            sendExecutor.execute {
                 try {
-                    close(WebSocketFrame.CloseCode.NormalClosure, reason, false)
-                } catch (e: Exception) { /* ignore */ }
+                    send(text)
+                } catch (e: IOException) {
+                    Log.w(TAG, "[CompanionWS] event=send_error detail=${e.message}")
+                }
             }
         }
+
+        override fun closeConnection(reason: String) {
+            try {
+                close(WebSocketFrame.CloseCode.NormalClosure, reason, false)
+            } catch (e: Exception) { /* ignore */ }
+        }
+
+        // -- WebSocket callbacks --
 
         override fun onOpen() {
             Log.i(TAG, "[CompanionWS] event=client_connected")
@@ -79,15 +76,14 @@ class CompanionWebSocket(
             }
             activeSocket = this
             scheduleTimeoutCheck()
+            transportListener?.onClientConnected(this)
         }
 
         override fun onClose(code: WebSocketFrame.CloseCode?, reason: String?, initiatedByRemote: Boolean) {
             Log.i(TAG, "[CompanionWS] event=client_disconnected detail=$reason")
             if (activeSocket == this) {
                 activeSocket = null
-                if (authenticated) {
-                    mainHandler.post { commandHandler.listener?.onCompanionDisconnected() }
-                }
+                transportListener?.onClientDisconnected(this, reason ?: "closed")
             }
             mainHandler.removeCallbacks(timeoutChecker)
         }
@@ -95,20 +91,7 @@ class CompanionWebSocket(
         override fun onMessage(message: WebSocketFrame) {
             lastMessageTime = System.currentTimeMillis()
             val text = message.textPayload ?: return
-            try {
-                val json = JSONObject(text)
-                val cmd = json.optString(ProtocolKeys.CMD, "")
-                val becameAuthenticated = commandHandler.handleCommand(cmd, json, sink, authenticated)
-                if (becameAuthenticated) {
-                    authenticated = true
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Invalid message: $text", e)
-                sink.sendEvent(JSONObject().apply {
-                    put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
-                    put(ProtocolKeys.MESSAGE, "invalid message format")
-                })
-            }
+            transportListener?.onMessageReceived(text, this)
         }
 
         override fun onPong(pong: WebSocketFrame?) {
@@ -119,16 +102,7 @@ class CompanionWebSocket(
             Log.w(TAG, "WebSocket exception", exception)
         }
 
-        fun sendEvt(json: JSONObject) {
-            val text = json.toString()
-            sendExecutor.execute {
-                try {
-                    send(text)
-                } catch (e: IOException) {
-                    Log.w(TAG, "[CompanionWS] event=send_error detail=${e.message}")
-                }
-            }
-        }
+        // -- Timeout --
 
         private fun scheduleTimeoutCheck() {
             mainHandler.postDelayed(timeoutChecker, TIMEOUT_MS)

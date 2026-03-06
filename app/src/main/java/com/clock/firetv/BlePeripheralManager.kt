@@ -2,8 +2,7 @@ package com.clock.firetv
 
 import com.firetv.protocol.BleConstants
 import com.firetv.protocol.BleFragmenter
-import com.firetv.protocol.ProtocolEvents
-import com.firetv.protocol.ProtocolKeys
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -22,14 +21,16 @@ import android.os.ParcelUuid
 import android.util.Log
 import org.json.JSONObject
 
+@SuppressLint("MissingPermission")
 class BlePeripheralManager(
     private val context: Context,
-    private val commandHandler: CompanionCommandHandler,
     private val deviceIdentity: DeviceIdentity
-) {
+) : ClientTransport {
     companion object {
         private const val TAG = "BlePeripheral"
     }
+
+    var transportListener: ClientTransport.Listener? = null
 
     private var gattServer: BluetoothGattServer? = null
     private var advertiser: BluetoothLeAdvertiser? = null
@@ -38,24 +39,29 @@ class BlePeripheralManager(
 
     // Connected client state
     private var connectedDevice: BluetoothDevice? = null
-    private var authenticated = false
     private var negotiatedMtu = BleConstants.DEFAULT_MTU
     private var subscribedToEvents = false
 
     // Fragmentation
     private val reassembler = BleFragmenter.Reassembler()
 
-    private val transportSink = object : CompanionCommandHandler.TransportSink {
-        override fun sendEvent(json: JSONObject) {
-            sendNotification(json)
-        }
+    // -- ClientTransport --
 
-        override fun closeConnection(reason: String) {
-            connectedDevice?.let { device ->
+    override fun sendEvent(json: JSONObject) {
+        sendNotification(json)
+    }
+
+    override fun closeConnection(reason: String) {
+        connectedDevice?.let { device ->
+            try {
                 gattServer?.cancelConnection(device)
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Cancel connection permission error: ${e.message}")
             }
         }
     }
+
+    // -- Lifecycle --
 
     fun init(): Boolean {
         val btAdapter = BluetoothAdapter.getDefaultAdapter()
@@ -104,7 +110,6 @@ class BlePeripheralManager(
         gattServer = null
         advertiser = null
         connectedDevice = null
-        authenticated = false
     }
 
     private fun setupGattService() {
@@ -231,22 +236,16 @@ class BlePeripheralManager(
                         }
                     }
                     connectedDevice = device
-                    authenticated = false
                     subscribedToEvents = false
                     negotiatedMtu = BleConstants.DEFAULT_MTU
                     reassembler.reset()
                 } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
                     Log.i(TAG, "BLE client disconnected: ${device.address}")
                     if (connectedDevice?.address == device.address) {
-                        if (authenticated) {
-                            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                commandHandler.listener?.onCompanionDisconnected()
-                            }
-                        }
                         connectedDevice = null
-                        authenticated = false
                         subscribedToEvents = false
                         reassembler.reset()
+                        transportListener?.onClientDisconnected(this@BlePeripheralManager, "ble_disconnected")
                     }
                 }
             } catch (e: SecurityException) {
@@ -281,7 +280,7 @@ class BlePeripheralManager(
                 // Reassemble fragments
                 val completeMessage = reassembler.addFragment(value)
                 if (completeMessage != null) {
-                    handleCompleteMessage(completeMessage)
+                    transportListener?.onMessageReceived(completeMessage, this@BlePeripheralManager)
                 }
             } else {
                 if (responseNeeded) {
@@ -302,12 +301,17 @@ class BlePeripheralManager(
             value: ByteArray?
         ) {
             if (descriptor.uuid == BleConstants.CCC_DESCRIPTOR_UUID) {
+                val wasSubscribed = subscribedToEvents
                 subscribedToEvents = value?.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == true
                 Log.d(TAG, "Event notifications ${if (subscribedToEvents) "enabled" else "disabled"}")
                 if (responseNeeded) {
                     try {
                         gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
                     } catch (e: SecurityException) { /* ignore */ }
+                }
+                // Client is ready when it subscribes to notifications
+                if (!wasSubscribed && subscribedToEvents) {
+                    transportListener?.onClientConnected(this@BlePeripheralManager)
                 }
             }
         }
@@ -327,23 +331,6 @@ class BlePeripheralManager(
                     gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
                 } catch (e: SecurityException) { /* ignore */ }
             }
-        }
-    }
-
-    private fun handleCompleteMessage(text: String) {
-        try {
-            val json = JSONObject(text)
-            val cmd = json.optString(ProtocolKeys.CMD, "")
-            val becameAuthenticated = commandHandler.handleCommand(cmd, json, transportSink, authenticated)
-            if (becameAuthenticated) {
-                authenticated = true
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Invalid BLE message: $text", e)
-            transportSink.sendEvent(JSONObject().apply {
-                put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
-                put(ProtocolKeys.MESSAGE, "invalid message format")
-            })
         }
     }
 }
