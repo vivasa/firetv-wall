@@ -68,7 +68,7 @@ class TvConnectionManagerMessageTest {
 
     @Test
     fun `handleMessage playback_state updates isPlaying`() {
-        manager.handleMessage("""{"evt":"playback_state","playing":true}""")
+        manager.handleMessage("""{"evt":"playback_state","isPlaying":true}""")
         ShadowLooper.idleMainLooper()
 
         assertThat(manager.tvState.isPlaying).isTrue()

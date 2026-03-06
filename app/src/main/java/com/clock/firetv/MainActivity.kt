@@ -56,7 +56,9 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     private lateinit var wallpaperMgr: WallpaperManager
     private lateinit var chimeMgr: ChimeManager
     private lateinit var youtubeMgr: YouTubePlayerManager
+    private lateinit var commandHandler: CompanionCommandHandler
     private var companionWs: CompanionWebSocket? = null
+    private var blePeripheral: BlePeripheralManager? = null
     private var nsdRegistration: NsdRegistration? = null
 
     // Now-playing label
@@ -119,6 +121,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         startEntranceAnimation()
         startCompanionWebSocket()
         startNsdRegistration()
+        startBlePeripheral()
 
         // Start clock updates
         handler.post(clockUpdateRunnable)
@@ -484,7 +487,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
             nowPlayingLabel.visibility = View.GONE
             companionWs?.sendEvent(org.json.JSONObject().apply {
                 put("evt", "playback_state")
-                put("playing", false)
+                put("isPlaying", false)
             })
             return
         }
@@ -501,10 +504,22 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
     }
 
     private fun startCompanionWebSocket() {
-        val ws = CompanionWebSocket(settings, deviceIdentity, 8765)
-        ws.listener = object : CompanionWebSocket.Listener {
+        commandHandler = CompanionCommandHandler(settings, deviceIdentity)
+        commandHandler.listener = object : CompanionCommandHandler.Listener {
             override fun onCompanionConnected() {
                 showLinkIndicator()
+                // Send current track info to newly connected companion
+                youtubeMgr.currentTrackInfo()?.let { (title, playlist) ->
+                    companionWs?.sendEvent(org.json.JSONObject().apply {
+                        put("evt", "track_changed")
+                        put("title", title)
+                        put("playlist", playlist ?: "")
+                    })
+                    companionWs?.sendEvent(org.json.JSONObject().apply {
+                        put("evt", "playback_state")
+                        put("isPlaying", true)
+                    })
+                }
             }
             override fun onCompanionDisconnected() {
                 hideLinkIndicator()
@@ -523,6 +538,12 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 settings.activePreset = -1
                 applyPlayerSettings()
             }
+            override fun onPausePlayback() {
+                youtubeMgr.pause()
+            }
+            override fun onResumePlayback() {
+                youtubeMgr.resume()
+            }
             override fun onSeek(offsetSec: Int) {
                 if (offsetSec > 0) youtubeMgr.seekForward() else youtubeMgr.seekBackward()
             }
@@ -533,6 +554,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 applySyncConfig(config)
             }
         }
+
+        val ws = CompanionWebSocket(commandHandler, 8765)
         try {
             ws.startServer()
             Thread.sleep(200) // NanoHTTPD binds on background thread
@@ -542,8 +565,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
             } else {
                 ws.stop()
                 android.util.Log.e("CompanionWS", "Port 8765 bind failed, trying 8766")
-                val fallback = CompanionWebSocket(settings, deviceIdentity, 8766)
-                fallback.listener = ws.listener
+                val fallback = CompanionWebSocket(commandHandler, 8766)
                 fallback.startServer()
                 Thread.sleep(200)
                 if (fallback.isAlive) {
@@ -689,6 +711,13 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         nsdRegistration = nsd
     }
 
+    private fun startBlePeripheral() {
+        val ble = BlePeripheralManager(this, commandHandler, deviceIdentity)
+        if (ble.init()) {
+            blePeripheral = ble
+        }
+    }
+
     // ---- Lifecycle ----
 
     override fun onResume() {
@@ -703,6 +732,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
     override fun onDestroy() {
         super.onDestroy()
+        blePeripheral?.destroy()
         nsdRegistration?.unregister()
         companionWs?.stop()
         handler.removeCallbacksAndMessages(null)

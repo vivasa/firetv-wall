@@ -19,6 +19,7 @@ class MantleApp : Application() {
         configStore = MantleConfigStore(this)
         deviceStore = DeviceStore(this)
         connectionManager = TvConnectionManager()
+        connectionManager.appContext = this
         connectionManager.registerConfigListener()
     }
 

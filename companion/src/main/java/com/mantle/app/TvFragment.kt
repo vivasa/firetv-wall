@@ -1,9 +1,12 @@
 package com.mantle.app
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +17,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -46,7 +50,7 @@ class TvFragment : Fragment() {
     // Playback controls
     private lateinit var btnSkipPrev: MaterialButton
     private lateinit var btnRewind: MaterialButton
-    private lateinit var btnStop: MaterialButton
+    private lateinit var btnPlayPause: MaterialButton
     private lateinit var btnForward: MaterialButton
     private lateinit var btnSkipNext: MaterialButton
 
@@ -65,6 +69,19 @@ class TvFragment : Fragment() {
     private val discoveredDevices = mutableMapOf<String, DeviceAdapter.DeviceItem>()
     private lateinit var deviceAdapter: DeviceAdapter
 
+    // BLE scanning
+    private val bleScanner = BleScanner()
+    private val blePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val allGranted = results.values.all { it }
+        if (allGranted) {
+            startBleScan()
+        } else {
+            Log.d(TAG, "BLE permissions denied, skipping BLE scan")
+        }
+    }
+
     private val connectionManager get() = MantleApp.instance.connectionManager
     private val configStore get() = MantleApp.instance.configStore
     private val deviceStore get() = MantleApp.instance.deviceStore
@@ -73,6 +90,9 @@ class TvFragment : Fragment() {
         override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
             updateConnectionUI(state)
             updateControlsEnabled(state == TvConnectionManager.ConnectionState.CONNECTED)
+            val connectedId = if (state == TvConnectionManager.ConnectionState.CONNECTED)
+                connectionManager.tvState.deviceId else null
+            deviceAdapter.setConnectedDeviceId(connectedId)
         }
 
         override fun onTrackChanged(title: String, playlist: String) {
@@ -80,7 +100,7 @@ class TvFragment : Fragment() {
         }
 
         override fun onPlaybackStateChanged(playing: Boolean) {
-            if (!playing) updateNowPlaying("", "")
+            btnPlayPause.setIconResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play)
         }
 
         override fun onConfigApplied(version: Int) {}
@@ -104,7 +124,7 @@ class TvFragment : Fragment() {
         // Playback controls
         btnSkipPrev = view.findViewById(R.id.btnSkipPrev)
         btnRewind = view.findViewById(R.id.btnRewind)
-        btnStop = view.findViewById(R.id.btnStop)
+        btnPlayPause = view.findViewById(R.id.btnPlayPause)
         btnForward = view.findViewById(R.id.btnForward)
         btnSkipNext = view.findViewById(R.id.btnSkipNext)
 
@@ -126,7 +146,9 @@ class TvFragment : Fragment() {
         // Playback controls
         btnSkipPrev.setOnClickListener { connectionManager.sendSkip(-1) }
         btnRewind.setOnClickListener { connectionManager.sendSeek(-30) }
-        btnStop.setOnClickListener { connectionManager.sendStop() }
+        btnPlayPause.setOnClickListener {
+            if (connectionManager.tvState.isPlaying) connectionManager.sendPause() else connectionManager.sendResume()
+        }
         btnForward.setOnClickListener { connectionManager.sendSeek(30) }
         btnSkipNext.setOnClickListener { connectionManager.sendSkip(1) }
 
@@ -218,7 +240,7 @@ class TvFragment : Fragment() {
     private fun updateControlsEnabled(enabled: Boolean) {
         btnSkipPrev.isEnabled = enabled
         btnRewind.isEnabled = enabled
-        btnStop.isEnabled = enabled
+        btnPlayPause.isEnabled = enabled
         btnForward.isEnabled = enabled
         btnSkipNext.isEnabled = enabled
     }
@@ -290,6 +312,9 @@ class TvFragment : Fragment() {
             Log.e(TAG, "Failed to start NSD discovery", e)
         }
 
+        // Start BLE scan with permission check
+        requestBlePermissionsAndScan()
+
         handler.postDelayed({
             if (discovering && discoveredDevices.isEmpty()) {
                 emptyDeviceState.visibility = View.VISIBLE
@@ -303,8 +328,57 @@ class TvFragment : Fragment() {
         try {
             nsdManager?.stopServiceDiscovery(discoveryListener)
         } catch (e: Exception) { /* ignore */ }
+        bleScanner.stopScan()
         discovering = false
         scanningProgress.visibility = View.GONE
+    }
+
+    private fun requestBlePermissionsAndScan() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
+        val allGranted = permissions.all {
+            ContextCompat.checkSelfPermission(requireContext(), it) == PackageManager.PERMISSION_GRANTED
+        }
+
+        if (allGranted) {
+            startBleScan()
+        } else {
+            blePermissionLauncher.launch(permissions)
+        }
+    }
+
+    private fun startBleScan() {
+        bleScanner.listener = object : BleScanner.Listener {
+            override fun onDeviceFound(bleDevice: BleScanner.BleDevice) {
+                handler.post {
+                    // De-duplicate: if same deviceId already found via NSD, add BLE info but prefer NSD
+                    val existing = discoveredDevices[bleDevice.deviceId]
+                    if (existing != null && existing.transportType == DeviceAdapter.TransportType.NSD) {
+                        // Already discovered via NSD, skip BLE duplicate
+                        return@post
+                    }
+
+                    val paired = deviceStore.getPairedDevices().find { it.deviceId == bleDevice.deviceId }
+                    discoveredDevices[bleDevice.deviceId] = DeviceAdapter.DeviceItem(
+                        deviceId = bleDevice.deviceId,
+                        deviceName = bleDevice.deviceName,
+                        host = "",
+                        port = 0,
+                        isPaired = paired != null,
+                        storedToken = paired?.token,
+                        transportType = DeviceAdapter.TransportType.BLE,
+                        bleDevice = bleDevice.device
+                    )
+                    refreshDeviceList()
+                    emptyDeviceState.visibility = View.GONE
+                }
+            }
+        }
+        bleScanner.startScan()
     }
 
     private val discoveryListener = object : NsdManager.DiscoveryListener {
@@ -344,6 +418,9 @@ class TvFragment : Fragment() {
     }
 
     private fun refreshDeviceList() {
+        val connectedId = if (connectionManager.state == TvConnectionManager.ConnectionState.CONNECTED)
+            connectionManager.tvState.deviceId else null
+        deviceAdapter.setConnectedDeviceId(connectedId)
         val items = discoveredDevices.values.sortedWith(
             compareByDescending<DeviceAdapter.DeviceItem> { it.isPaired }.thenBy { it.deviceName }
         )
@@ -352,7 +429,11 @@ class TvFragment : Fragment() {
 
     private fun onDeviceAction(device: DeviceAdapter.DeviceItem) {
         if (device.isPaired && device.storedToken != null) {
-            connectionManager.connect(device.host, device.port, device.storedToken)
+            if (device.transportType == DeviceAdapter.TransportType.BLE && device.bleDevice != null) {
+                connectionManager.connectBle(device.bleDevice, device.storedToken)
+            } else {
+                connectionManager.connect(device.host, device.port, device.storedToken)
+            }
             deviceStore.updateLastConnected(device.deviceId)
         } else {
             startPairing(device)
@@ -372,7 +453,11 @@ class TvFragment : Fragment() {
     }
 
     private fun startPairing(device: DeviceAdapter.DeviceItem) {
-        connectionManager.connectForPairing(device.host, device.port)
+        if (device.transportType == DeviceAdapter.TransportType.BLE && device.bleDevice != null) {
+            connectionManager.connectBleForPairing(device.bleDevice)
+        } else {
+            connectionManager.connectForPairing(device.host, device.port)
+        }
 
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_pair, null)
         val pinInput = dialogView.findViewById<TextInputEditText>(R.id.pinInput)

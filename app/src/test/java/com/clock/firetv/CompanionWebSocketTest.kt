@@ -27,7 +27,7 @@ class CompanionWebSocketTest {
 
     @Test
     fun `generatePin returns 4-digit string`() {
-        val pin = CompanionWebSocket.generatePin()
+        val pin = CompanionCommandHandler.generatePin()
         assertThat(pin).hasLength(4)
         assertThat(pin.toIntOrNull()).isNotNull()
     }
@@ -35,7 +35,7 @@ class CompanionWebSocketTest {
     @Test
     fun `generatePin is in range 1000-9999`() {
         repeat(100) {
-            val pin = CompanionWebSocket.generatePin().toInt()
+            val pin = CompanionCommandHandler.generatePin().toInt()
             assertThat(pin).isAtLeast(1000)
             assertThat(pin).isAtMost(9999)
         }
@@ -43,26 +43,27 @@ class CompanionWebSocketTest {
 
     @Test
     fun `generateToken returns 32 character hex string`() {
-        val token = CompanionWebSocket.generateToken()
+        val token = CompanionCommandHandler.generateToken()
         assertThat(token).hasLength(32)
         assertThat(token).matches("[0-9a-f]{32}")
     }
 
     @Test
     fun `generateToken produces unique values`() {
-        val tokens = (1..10).map { CompanionWebSocket.generateToken() }.toSet()
+        val tokens = (1..10).map { CompanionCommandHandler.generateToken() }.toSet()
         assertThat(tokens).hasSize(10)
     }
 
     @Test
     fun `generatePin produces varying values`() {
-        val pins = (1..20).map { CompanionWebSocket.generatePin() }.toSet()
+        val pins = (1..20).map { CompanionCommandHandler.generatePin() }.toSet()
         assertThat(pins.size).isGreaterThan(1)
     }
 
     // --- Pairing state machine tests ---
 
     private lateinit var server: CompanionWebSocket
+    private lateinit var commandHandler: CompanionCommandHandler
     private lateinit var settings: SettingsManager
     private lateinit var identity: DeviceIdentity
     private lateinit var okClient: OkHttpClient
@@ -70,13 +71,15 @@ class CompanionWebSocketTest {
     private var pinDismissed = false
     private var companionConnected = false
 
-    private val testListener = object : CompanionWebSocket.Listener {
+    private val testListener = object : CompanionCommandHandler.Listener {
         override fun onCompanionConnected() { companionConnected = true }
         override fun onCompanionDisconnected() { companionConnected = false }
         override fun onShowPin(pin: String) { capturedPin = pin }
         override fun onDismissPin() { pinDismissed = true }
         override fun onPlayPreset(index: Int) {}
         override fun onStopPlayback() {}
+        override fun onPausePlayback() {}
+        override fun onResumePlayback() {}
         override fun onSeek(offsetSec: Int) {}
         override fun onSkip(direction: Int) {}
         override fun onSyncConfig(config: JSONObject) {}
@@ -93,8 +96,9 @@ class CompanionWebSocketTest {
             .readTimeout(5, TimeUnit.SECONDS)
             .build()
 
-        server = CompanionWebSocket(settings, identity, 0)
-        server.listener = testListener
+        commandHandler = CompanionCommandHandler(settings, identity)
+        commandHandler.listener = testListener
+        server = CompanionWebSocket(commandHandler, 0)
         server.startServer()
     }
 
