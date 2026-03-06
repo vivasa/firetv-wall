@@ -3,6 +3,8 @@ package com.clock.firetv
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.firetv.protocol.ProtocolEvents
+import com.firetv.protocol.ProtocolKeys
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoWSD
 import org.json.JSONObject
@@ -69,8 +71,8 @@ class CompanionWebSocket(
                 Log.i(TAG, "[CompanionWS] event=client_replaced detail=old_client_closed")
                 try {
                     existing.send(JSONObject().apply {
-                        put("evt", "disconnected")
-                        put("reason", "replaced")
+                        put(ProtocolKeys.EVT, ProtocolEvents.DISCONNECTED)
+                        put(ProtocolKeys.REASON, "replaced")
                     }.toString())
                     existing.close(WebSocketFrame.CloseCode.NormalClosure, "replaced", false)
                 } catch (e: Exception) { /* ignore */ }
@@ -95,7 +97,7 @@ class CompanionWebSocket(
             val text = message.textPayload ?: return
             try {
                 val json = JSONObject(text)
-                val cmd = json.optString("cmd", "")
+                val cmd = json.optString(ProtocolKeys.CMD, "")
                 val becameAuthenticated = commandHandler.handleCommand(cmd, json, sink, authenticated)
                 if (becameAuthenticated) {
                     authenticated = true
@@ -103,8 +105,8 @@ class CompanionWebSocket(
             } catch (e: Exception) {
                 Log.w(TAG, "Invalid message: $text", e)
                 sink.sendEvent(JSONObject().apply {
-                    put("evt", "error")
-                    put("message", "invalid message format")
+                    put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
+                    put(ProtocolKeys.MESSAGE, "invalid message format")
                 })
             }
         }

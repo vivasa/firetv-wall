@@ -27,13 +27,15 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.firetv.protocol.ProtocolConfig
+import com.firetv.protocol.ProtocolKeys
 import com.google.android.material.textfield.TextInputEditText
 
 class TvFragment : Fragment() {
 
     companion object {
         private const val TAG = "TvFragment"
-        private const val SERVICE_TYPE = "_firetvclock._tcp."
+        private val SERVICE_TYPE = ProtocolConfig.NSD_SERVICE_TYPE
         private const val SCAN_TIMEOUT_MS = 15_000L
     }
 
@@ -389,7 +391,7 @@ class TvFragment : Fragment() {
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                     val host = serviceInfo.host?.hostAddress ?: return
                     val port = serviceInfo.port
-                    val deviceId = getAttributeString(serviceInfo, "deviceId") ?: serviceInfo.serviceName
+                    val deviceId = getAttributeString(serviceInfo, ProtocolKeys.DEVICE_ID) ?: serviceInfo.serviceName
                     val name = getAttributeString(serviceInfo, "name") ?: serviceInfo.serviceName
 
                     val paired = deviceStore.getPairedDevices().find { it.deviceId == deviceId }
@@ -560,7 +562,7 @@ class TvFragment : Fragment() {
                 if (ip.isNotEmpty()) {
                     val manualDevice = DeviceAdapter.DeviceItem(
                         deviceId = "manual_$ip", deviceName = ip,
-                        host = ip, port = 8765, isPaired = false
+                        host = ip, port = ProtocolConfig.DEFAULT_PORT, isPaired = false
                     )
                     startPairing(manualDevice)
                 }

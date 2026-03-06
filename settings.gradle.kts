@@ -15,6 +15,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "FireTVClock"
+include(":protocol")
 include(":app")
 include(":companion")
 project(":companion").name = "mantle"

@@ -5,13 +5,16 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.firetv.protocol.ProtocolCommands
+import com.firetv.protocol.ProtocolConfig
+import com.firetv.protocol.ProtocolEvents
+import com.firetv.protocol.ProtocolKeys
 import org.json.JSONObject
 
 class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
     companion object {
         private const val TAG = "TvConnectionMgr"
-        private const val PROTOCOL_VERSION = 1
         private const val SYNC_DEBOUNCE_MS = 500L
         private const val PING_INTERVAL_MS = 20_000L
         private const val AUTH_TIMEOUT_MS = 10_000L
@@ -87,7 +90,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     private val pingRunnable = object : Runnable {
         override fun run() {
             if (state == ConnectionState.CONNECTED) {
-                send(JSONObject().apply { put("cmd", "ping") })
+                send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.PING) })
                 mainHandler.postDelayed(this, PING_INTERVAL_MS)
             }
         }
@@ -100,9 +103,9 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
             if (pendingToken != null) {
                 val auth = JSONObject().apply {
-                    put("cmd", "auth")
-                    put("token", pendingToken)
-                    put("protocolVersion", PROTOCOL_VERSION)
+                    put(ProtocolKeys.CMD, ProtocolCommands.AUTH)
+                    put(ProtocolKeys.TOKEN, pendingToken)
+                    put(ProtocolKeys.PROTOCOL_VERSION, ProtocolConfig.PROTOCOL_VERSION)
                 }
                 transport?.send(auth)
             }
@@ -309,61 +312,61 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     }
 
     fun sendPairRequest() {
-        send(JSONObject().apply { put("cmd", "pair_request") })
+        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.PAIR_REQUEST) })
     }
 
     fun sendPairConfirm(pin: String) {
         send(JSONObject().apply {
-            put("cmd", "pair_confirm")
-            put("pin", pin)
+            put(ProtocolKeys.CMD, ProtocolCommands.PAIR_CONFIRM)
+            put(ProtocolKeys.PIN, pin)
         })
     }
 
     fun sendPlay(presetIndex: Int) {
         send(JSONObject().apply {
-            put("cmd", "play")
-            put("presetIndex", presetIndex)
+            put(ProtocolKeys.CMD, ProtocolCommands.PLAY)
+            put(ProtocolKeys.PRESET_INDEX, presetIndex)
         })
     }
 
     fun sendStop() {
-        send(JSONObject().apply { put("cmd", "stop") })
+        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.STOP) })
     }
 
     fun sendPause() {
-        send(JSONObject().apply { put("cmd", "pause") })
+        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.PAUSE) })
     }
 
     fun sendResume() {
-        send(JSONObject().apply { put("cmd", "resume") })
+        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.RESUME) })
     }
 
     fun sendSeek(offsetSec: Int) {
         send(JSONObject().apply {
-            put("cmd", "seek")
-            put("offsetSec", offsetSec)
+            put(ProtocolKeys.CMD, ProtocolCommands.SEEK)
+            put(ProtocolKeys.OFFSET_SEC, offsetSec)
         })
     }
 
     fun sendSkip(direction: Int) {
         send(JSONObject().apply {
-            put("cmd", "skip")
-            put("direction", direction)
+            put(ProtocolKeys.CMD, ProtocolCommands.SKIP)
+            put(ProtocolKeys.DIRECTION, direction)
         })
     }
 
     fun sendSyncConfig() {
         val configJson = MantleApp.instance.configStore.toJson()
         val msg = JSONObject().apply {
-            put("cmd", "sync_config")
-            put("config", configJson)
+            put(ProtocolKeys.CMD, ProtocolCommands.SYNC_CONFIG)
+            put(ProtocolKeys.CONFIG, configJson)
         }
-        Log.d(TAG, "Sending sync_config v${configJson.optInt("version")}")
+        Log.d(TAG, "Sending sync_config v${configJson.optInt(ProtocolKeys.VERSION)}")
         send(msg)
     }
 
     fun sendGetState() {
-        send(JSONObject().apply { put("cmd", "get_state") })
+        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.GET_STATE) })
     }
 
     private fun scheduleSyncConfig() {
@@ -378,14 +381,14 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     internal fun handleMessage(text: String) {
         try {
             val json = JSONObject(text)
-            val evt = json.optString("evt", "")
+            val evt = json.optString(ProtocolKeys.EVT, "")
             mainHandler.post {
                 when (evt) {
-                    "auth_ok" -> {
+                    ProtocolEvents.AUTH_OK -> {
                         mainHandler.removeCallbacks(authTimeoutRunnable)
                         ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_OK)
-                        val authDeviceId = json.optString("deviceId", "")
-                        val authDeviceName = json.optString("deviceName", "")
+                        val authDeviceId = json.optString(ProtocolKeys.DEVICE_ID, "")
+                        val authDeviceName = json.optString(ProtocolKeys.DEVICE_NAME, "")
                         if (authDeviceId.isNotEmpty()) {
                             tvState = tvState.copy(deviceId = authDeviceId, deviceName = authDeviceName)
                         }
@@ -394,60 +397,60 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
                         sendSyncConfig()
                         mainHandler.postDelayed(pingRunnable, PING_INTERVAL_MS)
                     }
-                    "auth_failed" -> {
+                    ProtocolEvents.AUTH_FAILED -> {
                         mainHandler.removeCallbacks(authTimeoutRunnable)
-                        val reason = json.optString("reason", "unknown")
+                        val reason = json.optString(ProtocolKeys.REASON, "unknown")
                         ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_FAILED, reason)
                         Log.w(TAG, "Auth failed: $reason")
                         disconnect()
                     }
-                    "paired" -> {
+                    ProtocolEvents.PAIRED -> {
                         mainHandler.removeCallbacks(authTimeoutRunnable)
                         ConnectionEventLog.log(ConnectionEventLog.EventType.CONNECTED, "paired")
-                        lastPairedToken = json.optString("token", "")
+                        lastPairedToken = json.optString(ProtocolKeys.TOKEN, "")
                         lastToken = lastPairedToken
-                        val pairedDeviceId = json.optString("deviceId", "")
-                        val pairedDeviceName = json.optString("deviceName", "")
+                        val pairedDeviceId = json.optString(ProtocolKeys.DEVICE_ID, "")
+                        val pairedDeviceName = json.optString(ProtocolKeys.DEVICE_NAME, "")
                         tvState = tvState.copy(deviceId = pairedDeviceId, deviceName = pairedDeviceName)
                         reconnectAttempt = 0
                         updateState(ConnectionState.CONNECTED)
                         sendSyncConfig()
                         mainHandler.postDelayed(pingRunnable, PING_INTERVAL_MS)
                     }
-                    "config_applied" -> {
-                        val version = json.optInt("version", -1)
+                    ProtocolEvents.CONFIG_APPLIED -> {
+                        val version = json.optInt(ProtocolKeys.VERSION, -1)
                         lastSyncedVersion = version
                         Log.d(TAG, "Config applied on TV, version=$version")
                         listeners.forEach { it.onConfigApplied(version) }
                     }
-                    "track_changed" -> {
-                        val title = json.optString("title", "")
-                        val playlist = json.optString("playlist", "")
+                    ProtocolEvents.TRACK_CHANGED -> {
+                        val title = json.optString(ProtocolKeys.TITLE, "")
+                        val playlist = json.optString(ProtocolKeys.PLAYLIST, "")
                         tvState = tvState.copy(nowPlayingTitle = title, nowPlayingPlaylist = playlist)
                         listeners.forEach { it.onTrackChanged(title, playlist) }
                     }
-                    "playback_state" -> {
-                        val playing = json.optBoolean("isPlaying", false)
+                    ProtocolEvents.PLAYBACK_STATE -> {
+                        val playing = json.optBoolean(ProtocolKeys.IS_PLAYING, false)
                         tvState = tvState.copy(isPlaying = playing)
                         listeners.forEach { it.onPlaybackStateChanged(playing) }
                     }
-                    "state" -> {
-                        val data = json.optJSONObject("data") ?: return@post
-                        val stateDeviceId = data.optString("deviceId", "")
-                        val stateDeviceName = data.optString("deviceName", "")
+                    ProtocolEvents.STATE -> {
+                        val data = json.optJSONObject(ProtocolKeys.DATA) ?: return@post
+                        val stateDeviceId = data.optString(ProtocolKeys.DEVICE_ID, "")
+                        val stateDeviceName = data.optString(ProtocolKeys.DEVICE_NAME, "")
                         if (stateDeviceId.isNotEmpty()) {
                             tvState = tvState.copy(deviceId = stateDeviceId, deviceName = stateDeviceName)
                         }
-                        val activePreset = data.optInt("activePreset", -1)
+                        val activePreset = data.optInt(ProtocolKeys.ACTIVE_PRESET, -1)
                         if (activePreset >= 0) {
                             val playing = activePreset >= 0
                             tvState = tvState.copy(isPlaying = playing)
                             listeners.forEach { it.onPlaybackStateChanged(playing) }
                         }
                     }
-                    "pong" -> { /* keepalive, ignore */ }
-                    "error" -> {
-                        Log.w(TAG, "Server error: ${json.optString("message")}")
+                    ProtocolEvents.PONG -> { /* keepalive, ignore */ }
+                    ProtocolEvents.ERROR -> {
+                        Log.w(TAG, "Server error: ${json.optString(ProtocolKeys.MESSAGE)}")
                     }
                 }
             }

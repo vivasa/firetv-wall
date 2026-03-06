@@ -1,6 +1,7 @@
 package com.mantle.app
 
 import android.content.Context
+import com.firetv.protocol.ProtocolConfig
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -28,7 +29,7 @@ class DeviceStore(context: Context) {
                     deviceName = obj.getString("deviceName"),
                     token = obj.getString("token"),
                     host = obj.getString("host"),
-                    port = obj.optInt("port", 8765),
+                    port = obj.optInt("port", ProtocolConfig.DEFAULT_PORT),
                     lastConnected = obj.optLong("lastConnected", 0)
                 )
             }

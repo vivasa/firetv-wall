@@ -1,5 +1,6 @@
 package com.mantle.app
 
+import com.firetv.protocol.BleConstants
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.BluetoothLeScanner

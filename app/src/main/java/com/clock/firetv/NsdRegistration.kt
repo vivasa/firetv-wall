@@ -1,5 +1,7 @@
 package com.clock.firetv
 
+import com.firetv.protocol.ProtocolConfig
+import com.firetv.protocol.ProtocolKeys
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -11,7 +13,7 @@ class NsdRegistration(
 ) {
     companion object {
         private const val TAG = "NsdRegistration"
-        private const val SERVICE_TYPE = "_firetvclock._tcp"
+        private val SERVICE_TYPE = ProtocolConfig.NSD_SERVICE_TYPE
     }
 
     private var nsdManager: NsdManager? = null
@@ -43,7 +45,7 @@ class NsdRegistration(
                 serviceName = deviceIdentity.deviceName
                 serviceType = SERVICE_TYPE
                 setPort(port)
-                setAttribute("deviceId", deviceIdentity.deviceId)
+                setAttribute(ProtocolKeys.DEVICE_ID, deviceIdentity.deviceId)
                 setAttribute("name", deviceIdentity.deviceName)
                 setAttribute("version", "1")
             }

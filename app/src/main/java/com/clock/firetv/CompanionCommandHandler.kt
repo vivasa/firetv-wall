@@ -3,6 +3,9 @@ package com.clock.firetv
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.firetv.protocol.ProtocolCommands
+import com.firetv.protocol.ProtocolEvents
+import com.firetv.protocol.ProtocolKeys
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -58,25 +61,25 @@ class CompanionCommandHandler(
 
     fun handleCommand(cmd: String, json: JSONObject, sink: TransportSink, isAuthenticated: Boolean): Boolean {
         return when (cmd) {
-            "ping" -> {
-                sink.sendEvent(JSONObject().apply { put("evt", "pong") })
+            ProtocolCommands.PING -> {
+                sink.sendEvent(JSONObject().apply { put(ProtocolKeys.EVT, ProtocolEvents.PONG) })
                 false // no auth change
             }
-            "pair_request" -> {
+            ProtocolCommands.PAIR_REQUEST -> {
                 handlePairRequest(sink)
                 false
             }
-            "pair_confirm" -> {
-                handlePairConfirm(json.optString("pin", ""), sink)
+            ProtocolCommands.PAIR_CONFIRM -> {
+                handlePairConfirm(json.optString(ProtocolKeys.PIN, ""), sink)
             }
-            "auth" -> {
-                handleAuth(json.optString("token", ""), sink)
+            ProtocolCommands.AUTH -> {
+                handleAuth(json.optString(ProtocolKeys.TOKEN, ""), sink)
             }
             else -> {
                 if (!isAuthenticated) {
                     sink.sendEvent(JSONObject().apply {
-                        put("evt", "error")
-                        put("message", "not authenticated")
+                        put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
+                        put(ProtocolKeys.MESSAGE, "not authenticated")
                     })
                     false
                 } else {
@@ -91,8 +94,8 @@ class CompanionCommandHandler(
         val now = System.currentTimeMillis()
         if (now < rateLimitUntil) {
             sink.sendEvent(JSONObject().apply {
-                put("evt", "auth_failed")
-                put("reason", "rate_limited")
+                put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
+                put(ProtocolKeys.REASON, ProtocolEvents.RATE_LIMITED)
             })
             return
         }
@@ -117,16 +120,16 @@ class CompanionCommandHandler(
         val now = System.currentTimeMillis()
         if (now < rateLimitUntil) {
             sink.sendEvent(JSONObject().apply {
-                put("evt", "auth_failed")
-                put("reason", "rate_limited")
+                put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
+                put(ProtocolKeys.REASON, ProtocolEvents.RATE_LIMITED)
             })
             return false
         }
 
         if (currentPin == null || now > pinExpiresAt) {
             sink.sendEvent(JSONObject().apply {
-                put("evt", "auth_failed")
-                put("reason", "pin_expired")
+                put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
+                put(ProtocolKeys.REASON, ProtocolEvents.PIN_EXPIRED)
             })
             mainHandler.post { listener?.onDismissPin() }
             return false
@@ -138,14 +141,14 @@ class CompanionCommandHandler(
                 rateLimitUntil = now + RATE_LIMIT_COOLDOWN_MS
                 currentPin = null
                 sink.sendEvent(JSONObject().apply {
-                    put("evt", "auth_failed")
-                    put("reason", "rate_limited")
+                    put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
+                    put(ProtocolKeys.REASON, ProtocolEvents.RATE_LIMITED)
                 })
                 mainHandler.post { listener?.onDismissPin() }
             } else {
                 sink.sendEvent(JSONObject().apply {
-                    put("evt", "auth_failed")
-                    put("reason", "invalid_pin")
+                    put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
+                    put(ProtocolKeys.REASON, ProtocolEvents.INVALID_PIN)
                 })
             }
             return false
@@ -157,10 +160,10 @@ class CompanionCommandHandler(
         storeToken(token)
 
         sink.sendEvent(JSONObject().apply {
-            put("evt", "paired")
-            put("token", token)
-            put("deviceId", deviceIdentity.deviceId)
-            put("deviceName", deviceIdentity.deviceName)
+            put(ProtocolKeys.EVT, ProtocolEvents.PAIRED)
+            put(ProtocolKeys.TOKEN, token)
+            put(ProtocolKeys.DEVICE_ID, deviceIdentity.deviceId)
+            put(ProtocolKeys.DEVICE_NAME, deviceIdentity.deviceName)
         })
 
         mainHandler.post {
@@ -170,8 +173,8 @@ class CompanionCommandHandler(
 
         // Send state dump
         sink.sendEvent(JSONObject().apply {
-            put("evt", "state")
-            put("data", buildStateJson())
+            put(ProtocolKeys.EVT, ProtocolEvents.STATE)
+            put(ProtocolKeys.DATA, buildStateJson())
         })
 
         return true
@@ -182,22 +185,22 @@ class CompanionCommandHandler(
         if (isValidToken(token)) {
             Log.i(TAG, "auth_ok: token_validated")
             sink.sendEvent(JSONObject().apply {
-                put("evt", "auth_ok")
-                put("deviceId", deviceIdentity.deviceId)
-                put("deviceName", deviceIdentity.deviceName)
+                put(ProtocolKeys.EVT, ProtocolEvents.AUTH_OK)
+                put(ProtocolKeys.DEVICE_ID, deviceIdentity.deviceId)
+                put(ProtocolKeys.DEVICE_NAME, deviceIdentity.deviceName)
             })
             mainHandler.post { listener?.onCompanionConnected() }
 
             sink.sendEvent(JSONObject().apply {
-                put("evt", "state")
-                put("data", buildStateJson())
+                put(ProtocolKeys.EVT, ProtocolEvents.STATE)
+                put(ProtocolKeys.DATA, buildStateJson())
             })
             return true
         } else {
             Log.i(TAG, "auth_failed: invalid_token")
             sink.sendEvent(JSONObject().apply {
-                put("evt", "auth_failed")
-                put("reason", "invalid_token")
+                put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
+                put(ProtocolKeys.REASON, "invalid_token")
             })
             return false
         }
@@ -206,43 +209,43 @@ class CompanionCommandHandler(
     private fun handleAuthenticatedCommand(cmd: String, json: JSONObject, sink: TransportSink) {
         mainHandler.post {
             when (cmd) {
-                "play" -> listener?.onPlayPreset(json.optInt("presetIndex", -1))
-                "stop" -> listener?.onStopPlayback()
-                "pause" -> {
+                ProtocolCommands.PLAY -> listener?.onPlayPreset(json.optInt(ProtocolKeys.PRESET_INDEX, -1))
+                ProtocolCommands.STOP -> listener?.onStopPlayback()
+                ProtocolCommands.PAUSE -> {
                     listener?.onPausePlayback()
                     sink.sendEvent(JSONObject().apply {
-                        put("evt", "playback_state")
-                        put("isPlaying", false)
+                        put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
+                        put(ProtocolKeys.IS_PLAYING, false)
                     })
                 }
-                "resume" -> {
+                ProtocolCommands.RESUME -> {
                     listener?.onResumePlayback()
                     sink.sendEvent(JSONObject().apply {
-                        put("evt", "playback_state")
-                        put("isPlaying", true)
+                        put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
+                        put(ProtocolKeys.IS_PLAYING, true)
                     })
                 }
-                "seek" -> listener?.onSeek(json.optInt("offsetSec", 0))
-                "skip" -> listener?.onSkip(json.optInt("direction", 1))
-                "sync_config" -> {
-                    val config = json.optJSONObject("config") ?: return@post
+                ProtocolCommands.SEEK -> listener?.onSeek(json.optInt(ProtocolKeys.OFFSET_SEC, 0))
+                ProtocolCommands.SKIP -> listener?.onSkip(json.optInt(ProtocolKeys.DIRECTION, 1))
+                ProtocolCommands.SYNC_CONFIG -> {
+                    val config = json.optJSONObject(ProtocolKeys.CONFIG) ?: return@post
                     listener?.onSyncConfig(config)
-                    val version = config.optInt("version", -1)
+                    val version = config.optInt(ProtocolKeys.VERSION, -1)
                     sink.sendEvent(JSONObject().apply {
-                        put("evt", "config_applied")
-                        put("version", version)
+                        put(ProtocolKeys.EVT, ProtocolEvents.CONFIG_APPLIED)
+                        put(ProtocolKeys.VERSION, version)
                     })
                 }
-                "get_state" -> {
+                ProtocolCommands.GET_STATE -> {
                     sink.sendEvent(JSONObject().apply {
-                        put("evt", "state")
-                        put("data", buildStateJson())
+                        put(ProtocolKeys.EVT, ProtocolEvents.STATE)
+                        put(ProtocolKeys.DATA, buildStateJson())
                     })
                 }
                 else -> {
                     sink.sendEvent(JSONObject().apply {
-                        put("evt", "error")
-                        put("message", "unknown command: $cmd")
+                        put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
+                        put(ProtocolKeys.MESSAGE, "unknown command: $cmd")
                     })
                 }
             }
@@ -251,30 +254,30 @@ class CompanionCommandHandler(
 
     fun buildStateJson(): JSONObject {
         val state = JSONObject()
-        state.put("deviceId", deviceIdentity.deviceId)
-        state.put("deviceName", deviceIdentity.deviceName)
-        state.put("theme", settings.theme)
-        state.put("primaryTimezone", settings.primaryTimezone)
-        state.put("secondaryTimezone", settings.secondaryTimezone)
-        state.put("timeFormat", settings.timeFormat)
-        state.put("chimeEnabled", settings.chimeEnabled)
-        state.put("wallpaperEnabled", settings.wallpaperEnabled)
-        state.put("wallpaperInterval", settings.wallpaperIntervalMinutes)
-        state.put("driftEnabled", settings.driftEnabled)
-        state.put("nightDimEnabled", settings.nightDimEnabled)
-        state.put("activePreset", settings.activePreset)
-        state.put("playerSize", settings.playerSize)
-        state.put("playerVisible", settings.playerVisible)
+        state.put(ProtocolKeys.DEVICE_ID, deviceIdentity.deviceId)
+        state.put(ProtocolKeys.DEVICE_NAME, deviceIdentity.deviceName)
+        state.put(ProtocolKeys.THEME, settings.theme)
+        state.put(ProtocolKeys.PRIMARY_TIMEZONE, settings.primaryTimezone)
+        state.put(ProtocolKeys.SECONDARY_TIMEZONE, settings.secondaryTimezone)
+        state.put(ProtocolKeys.TIME_FORMAT, settings.timeFormat)
+        state.put(ProtocolKeys.CHIME_ENABLED, settings.chimeEnabled)
+        state.put(ProtocolKeys.WALLPAPER_ENABLED, settings.wallpaperEnabled)
+        state.put(ProtocolKeys.WALLPAPER_INTERVAL, settings.wallpaperIntervalMinutes)
+        state.put(ProtocolKeys.DRIFT_ENABLED, settings.driftEnabled)
+        state.put(ProtocolKeys.NIGHT_DIM_ENABLED, settings.nightDimEnabled)
+        state.put(ProtocolKeys.ACTIVE_PRESET, settings.activePreset)
+        state.put(ProtocolKeys.PLAYER_SIZE, settings.playerSize)
+        state.put(ProtocolKeys.PLAYER_VISIBLE, settings.playerVisible)
 
         val presets = JSONArray()
         for (i in 0 until settings.presetCount) {
             val p = JSONObject()
-            p.put("index", i)
-            p.put("url", settings.getPresetUrl(i))
-            p.put("name", settings.getPresetName(i))
+            p.put(ProtocolKeys.INDEX, i)
+            p.put(ProtocolKeys.URL, settings.getPresetUrl(i))
+            p.put(ProtocolKeys.NAME, settings.getPresetName(i))
             presets.put(p)
         }
-        state.put("presets", presets)
+        state.put(ProtocolKeys.PRESETS, presets)
         return state
     }
 

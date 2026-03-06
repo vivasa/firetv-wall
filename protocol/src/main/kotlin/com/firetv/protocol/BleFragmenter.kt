@@ -1,4 +1,4 @@
-package com.mantle.app
+package com.firetv.protocol
 
 import java.io.ByteArrayOutputStream
 
@@ -50,6 +50,7 @@ object BleFragmenter {
             if (data.size < 2) return null
 
             val moreFragments = data[0] == 0x01.toByte()
+            // seq = data[1], used for ordering verification (not enforced here)
             val payload = data.copyOfRange(2, data.size)
             buffer.write(payload)
 

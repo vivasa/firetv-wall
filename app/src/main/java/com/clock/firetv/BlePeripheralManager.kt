@@ -1,5 +1,9 @@
 package com.clock.firetv
 
+import com.firetv.protocol.BleConstants
+import com.firetv.protocol.BleFragmenter
+import com.firetv.protocol.ProtocolEvents
+import com.firetv.protocol.ProtocolKeys
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -329,7 +333,7 @@ class BlePeripheralManager(
     private fun handleCompleteMessage(text: String) {
         try {
             val json = JSONObject(text)
-            val cmd = json.optString("cmd", "")
+            val cmd = json.optString(ProtocolKeys.CMD, "")
             val becameAuthenticated = commandHandler.handleCommand(cmd, json, transportSink, authenticated)
             if (becameAuthenticated) {
                 authenticated = true
@@ -337,8 +341,8 @@ class BlePeripheralManager(
         } catch (e: Exception) {
             Log.w(TAG, "Invalid BLE message: $text", e)
             transportSink.sendEvent(JSONObject().apply {
-                put("evt", "error")
-                put("message", "invalid message format")
+                put(ProtocolKeys.EVT, ProtocolEvents.ERROR)
+                put(ProtocolKeys.MESSAGE, "invalid message format")
             })
         }
     }

@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./gradlew :app:test :mantle:test)"
+      "Bash(./gradlew :app:test :mantle:test)",
+      "Read(//Users/adigo/code/2026/firetv-wall/**)",
+      "Bash(for c in shared-protocol-module firetv-transport-abstraction decompose-main-activity companion-viewmodel-arch standardize-async-patterns)",
+      "Bash(do echo \"=== $c ===\")",
+      "Bash(head -30 settings.gradle*)",
+      "Bash(head -20 build.gradle*)",
+      "Bash(./gradlew :protocol:build)",
+      "Bash(./gradlew :app:compileDebugKotlin :mantle:compileDebugKotlin)",
+      "Bash(./gradlew test)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-package com.mantle.app
+package com.firetv.protocol
 
 import java.util.UUID
 

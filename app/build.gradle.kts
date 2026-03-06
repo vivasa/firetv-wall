@@ -43,6 +43,7 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.4")
 
+    implementation(project(":protocol"))
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.leanback:leanback:1.0.0")

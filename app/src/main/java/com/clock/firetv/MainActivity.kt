@@ -14,6 +14,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.ui.PlayerView
+import com.firetv.protocol.ProtocolConfig
+import com.firetv.protocol.ProtocolEvents
+import com.firetv.protocol.ProtocolKeys
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -486,8 +489,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         if (videoTitle == null) {
             nowPlayingLabel.visibility = View.GONE
             companionWs?.sendEvent(org.json.JSONObject().apply {
-                put("evt", "playback_state")
-                put("isPlaying", false)
+                put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
+                put(ProtocolKeys.IS_PLAYING, false)
             })
             return
         }
@@ -497,9 +500,9 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
         // Broadcast to companion
         companionWs?.sendEvent(org.json.JSONObject().apply {
-            put("evt", "track_changed")
-            put("title", videoTitle)
-            put("playlist", playlistTitle ?: "")
+            put(ProtocolKeys.EVT, ProtocolEvents.TRACK_CHANGED)
+            put(ProtocolKeys.TITLE, videoTitle)
+            put(ProtocolKeys.PLAYLIST, playlistTitle ?: "")
         })
     }
 
@@ -511,13 +514,13 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 // Send current track info to newly connected companion
                 youtubeMgr.currentTrackInfo()?.let { (title, playlist) ->
                     companionWs?.sendEvent(org.json.JSONObject().apply {
-                        put("evt", "track_changed")
-                        put("title", title)
-                        put("playlist", playlist ?: "")
+                        put(ProtocolKeys.EVT, ProtocolEvents.TRACK_CHANGED)
+                        put(ProtocolKeys.TITLE, title)
+                        put(ProtocolKeys.PLAYLIST, playlist ?: "")
                     })
                     companionWs?.sendEvent(org.json.JSONObject().apply {
-                        put("evt", "playback_state")
-                        put("isPlaying", true)
+                        put(ProtocolKeys.EVT, ProtocolEvents.PLAYBACK_STATE)
+                        put(ProtocolKeys.IS_PLAYING, true)
                     })
                 }
             }
@@ -555,7 +558,7 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
             }
         }
 
-        val ws = CompanionWebSocket(commandHandler, 8765)
+        val ws = CompanionWebSocket(commandHandler, ProtocolConfig.DEFAULT_PORT)
         try {
             ws.startServer()
             Thread.sleep(200) // NanoHTTPD binds on background thread
@@ -564,8 +567,8 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
                 android.util.Log.e("CompanionWS", "WebSocket server started on port ${ws.actualPort}")
             } else {
                 ws.stop()
-                android.util.Log.e("CompanionWS", "Port 8765 bind failed, trying 8766")
-                val fallback = CompanionWebSocket(commandHandler, 8766)
+                android.util.Log.e("CompanionWS", "Port ${ProtocolConfig.DEFAULT_PORT} bind failed, trying ${ProtocolConfig.FALLBACK_PORT}")
+                val fallback = CompanionWebSocket(commandHandler, ProtocolConfig.FALLBACK_PORT)
                 fallback.startServer()
                 Thread.sleep(200)
                 if (fallback.isAlive) {
@@ -586,12 +589,12 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
 
         // Clock settings
         config.optJSONObject("clock")?.let { clock ->
-            settings.theme = clock.optInt("theme", settings.theme)
-            settings.primaryTimezone = clock.optString("primaryTimezone", settings.primaryTimezone)
-            settings.secondaryTimezone = clock.optString("secondaryTimezone", settings.secondaryTimezone)
-            settings.timeFormat = clock.optInt("timeFormat", settings.timeFormat)
-            settings.nightDimEnabled = clock.optBoolean("nightDimEnabled", settings.nightDimEnabled)
-            settings.driftEnabled = clock.optBoolean("driftEnabled", settings.driftEnabled)
+            settings.theme = clock.optInt(ProtocolKeys.THEME, settings.theme)
+            settings.primaryTimezone = clock.optString(ProtocolKeys.PRIMARY_TIMEZONE, settings.primaryTimezone)
+            settings.secondaryTimezone = clock.optString(ProtocolKeys.SECONDARY_TIMEZONE, settings.secondaryTimezone)
+            settings.timeFormat = clock.optInt(ProtocolKeys.TIME_FORMAT, settings.timeFormat)
+            settings.nightDimEnabled = clock.optBoolean(ProtocolKeys.NIGHT_DIM_ENABLED, settings.nightDimEnabled)
+            settings.driftEnabled = clock.optBoolean(ProtocolKeys.DRIFT_ENABLED, settings.driftEnabled)
         }
 
         // Wallpaper settings
@@ -609,9 +612,9 @@ class MainActivity : AppCompatActivity(), YouTubePlayerManager.OnTrackChangeList
         config.optJSONObject("player")?.let { player ->
             settings.playerSize = player.optInt("size", settings.playerSize)
             settings.playerVisible = player.optBoolean("visible", settings.playerVisible)
-            settings.activePreset = player.optInt("activePreset", settings.activePreset)
+            settings.activePreset = player.optInt(ProtocolKeys.ACTIVE_PRESET, settings.activePreset)
 
-            player.optJSONArray("presets")?.let { presets ->
+            player.optJSONArray(ProtocolKeys.PRESETS)?.let { presets ->
                 settings.setPresetsFromConfig(presets)
             }
         }

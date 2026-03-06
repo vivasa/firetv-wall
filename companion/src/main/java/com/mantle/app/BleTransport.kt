@@ -1,5 +1,7 @@
 package com.mantle.app
 
+import com.firetv.protocol.BleConstants
+import com.firetv.protocol.BleFragmenter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
