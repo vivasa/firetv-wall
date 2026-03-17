@@ -135,4 +135,44 @@ class ConfigSyncManagerTest {
         syncManager.flushSync()
         assertEquals(0, sentMessages.size)
     }
+
+    @Test
+    fun `setConnected sends playlists only without activePreset`() = testScope.runTest {
+        // Add a preset and set active
+        configStore.addPreset(Preset("Jazz", "http://jazz.com"))
+        configStore.setActivePreset(0)
+        sentMessages.clear()
+
+        syncManager.setConnected(true)
+        runCurrent()
+
+        assertEquals(1, sentMessages.size)
+        val config = sentMessages[0].getJSONObject("config")
+        val player = config.getJSONObject("player")
+        // activePreset should be -1 (playlists-only mode)
+        assertEquals(-1, player.getInt("activePreset"))
+        // But presets should still be present
+        assertEquals(1, player.getJSONArray("presets").length())
+    }
+
+    @Test
+    fun `suppressNextSync skips one config change`() = testScope.runTest {
+        syncManager.setConnected(true)
+        runCurrent()
+        sentMessages.clear()
+
+        syncManager.suppressNextSync = true
+        syncManager.onConfigChanged(configStore.config)
+        advanceTimeBy(1000)
+        runCurrent()
+
+        // Suppressed — no sync sent
+        assertEquals(0, sentMessages.size)
+
+        // Next change should NOT be suppressed
+        syncManager.onConfigChanged(configStore.config)
+        advanceTimeBy(500)
+        runCurrent()
+        assertEquals(1, sentMessages.size)
+    }
 }

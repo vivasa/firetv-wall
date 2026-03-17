@@ -26,8 +26,11 @@ class DeviceSheetFragment : BottomSheetDialogFragment() {
         val btnAddDevice: TextView = view.findViewById(R.id.btnSheetAddDevice)
 
         btnAddDevice.setOnClickListener {
-            viewModel.startDiscovery()
             dismiss()
+            parentFragmentManager.beginTransaction()
+                .replace(R.id.fragmentContainer, OnboardingFragment())
+                .addToBackStack(null)
+                .commit()
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -53,12 +56,21 @@ class DeviceSheetFragment : BottomSheetDialogFragment() {
             }
 
             row.findViewById<TextView>(android.R.id.text2).apply {
-                text = if (isConnected) "Connected" else {
-                    if (device.lastConnected > 0) {
-                        "Last: ${java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(device.lastConnected))}"
-                    } else "Not connected"
+                if (isConnected) {
+                    val activeIdx = state.activePreset
+                    val activeName = state.allPlaylists.getOrNull(activeIdx)?.name
+                    text = if (activeName != null) "Connected · Playing $activeName" else "Connected"
+                    setTextColor(resources.getColor(R.color.mantle_accent, null))
+                } else if (device.lastPresetName != null) {
+                    text = device.lastPresetName
+                    setTextColor(resources.getColor(R.color.mantle_on_surface_muted, null))
+                } else if (device.lastConnected > 0) {
+                    text = "Last: ${java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(device.lastConnected))}"
+                    setTextColor(resources.getColor(R.color.mantle_on_surface_muted, null))
+                } else {
+                    text = "Not connected"
+                    setTextColor(resources.getColor(R.color.mantle_on_surface_muted, null))
                 }
-                setTextColor(resources.getColor(R.color.mantle_on_surface_muted, null))
             }
 
             if (!isConnected) {

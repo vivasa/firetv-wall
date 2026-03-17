@@ -20,20 +20,32 @@ class ConfigSyncManager(
 
     private var connected = false
     private var syncJob: Job? = null
+    var suppressNextSync = false
 
     fun setConnected(connected: Boolean) {
         this.connected = connected
         if (connected) {
-            doSync()
+            syncPlaylistsOnly()
         } else {
             syncJob?.cancel()
         }
     }
 
     override fun onConfigChanged(config: MantleConfig) {
+        if (suppressNextSync) {
+            suppressNextSync = false
+            return
+        }
         if (connected) {
             scheduleSyncConfig()
         }
+    }
+
+    fun syncPlaylistsOnly() {
+        val configJson = configStore.toJson()
+        configJson.optJSONObject("player")?.put("activePreset", -1)
+        Log.d(TAG, "Sending sync_config (playlists only) v${configJson.optInt("version")}")
+        sendSync(TvProtocolHandler.buildSyncConfig(configJson))
     }
 
     fun flushSync() {

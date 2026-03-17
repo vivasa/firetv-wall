@@ -93,4 +93,19 @@ class DeviceStoreTest {
         val freshStore = DeviceStore(context)
         assertThat(freshStore.getPairedDevices()).isEmpty()
     }
+
+    @Test
+    fun `updateLastPresetName stores and round-trips`() {
+        store.addDevice(DeviceStore.PairedDevice("id1", "TV 1", "t1", "1.1.1.1", 8765))
+        store.updateLastPresetName("id1", "Jazz Standards")
+        val device = store.getPairedDevices().first()
+        assertThat(device.lastPresetName).isEqualTo("Jazz Standards")
+    }
+
+    @Test
+    fun `lastPresetName is null by default`() {
+        store.addDevice(DeviceStore.PairedDevice("id1", "TV 1", "t1", "1.1.1.1", 8765))
+        val device = store.getPairedDevices().first()
+        assertThat(device.lastPresetName).isNull()
+    }
 }

@@ -103,6 +103,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
+        // Adopt TV's active preset on connect (from STATE event)
+        viewModelScope.launch {
+            var lastReported = -1
+            connectionManager.tvStateFlow.collect { tvState ->
+                val reported = tvState.reportedActivePreset
+                if (reported >= 0 && reported != lastReported) {
+                    lastReported = reported
+                    if (reported != configStore.config.player.activePreset) {
+                        app.configSyncManager.suppressNextSync = true
+                        configStore.setActivePreset(reported)
+                    }
+                    // Update last-known preset name for this device
+                    val presetName = configStore.config.player.presets.getOrNull(reported)?.name
+                    if (tvState.deviceId.isNotEmpty() && presetName != null) {
+                        deviceStore.updateLastPresetName(tvState.deviceId, presetName)
+                    }
+                }
+            }
+        }
     }
 
     val uiState: StateFlow<PlayerUiState> = combine(
@@ -186,6 +205,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         connectionManager.clearTrackList()
         configStore.setActivePreset(index)
         configStore.setPresetLastPlayed(index, System.currentTimeMillis())
+        // Track last-known preset per device
+        val deviceId = connectionManager.tvState.deviceId
+        val presetName = configStore.config.player.presets.getOrNull(index)?.name
+        if (deviceId.isNotEmpty() && presetName != null) {
+            deviceStore.updateLastPresetName(deviceId, presetName)
+        }
         if (connectionManager.state == TvConnectionManager.ConnectionState.CONNECTED) {
             // Ensure TV has latest config (especially new presets) before sending PLAY
             if (configStore.config.version > connectionManager.lastSyncedVersion) {

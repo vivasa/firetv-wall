@@ -43,7 +43,8 @@ class TvConnectionManager(
         val nowPlayingPlaylist: String = "",
         val isPlaying: Boolean = false,
         val playlistTracks: List<TrackItem> = emptyList(),
-        val currentTrackIndex: Int = -1
+        val currentTrackIndex: Int = -1,
+        val reportedActivePreset: Int = -1
     )
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
@@ -412,7 +413,7 @@ class TvConnectionManager(
                             updated = updated.copy(deviceId = event.deviceId, deviceName = event.deviceName)
                         }
                         if (event.activePreset >= 0) {
-                            updated = updated.copy(isPlaying = true)
+                            updated = updated.copy(isPlaying = true, reportedActivePreset = event.activePreset)
                         }
                         updated
                     }

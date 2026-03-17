@@ -15,7 +15,8 @@ class DeviceStore(context: Context) {
         val token: String,
         val host: String,
         val port: Int,
-        val lastConnected: Long = 0
+        val lastConnected: Long = 0,
+        val lastPresetName: String? = null
     )
 
     fun getPairedDevices(): List<PairedDevice> {
@@ -30,7 +31,8 @@ class DeviceStore(context: Context) {
                     token = obj.getString("token"),
                     host = obj.getString("host"),
                     port = obj.optInt("port", ProtocolConfig.DEFAULT_PORT),
-                    lastConnected = obj.optLong("lastConnected", 0)
+                    lastConnected = obj.optLong("lastConnected", 0),
+                    lastPresetName = obj.optString("lastPresetName", null)?.ifEmpty { null }
                 )
             }
         } catch (e: Exception) {
@@ -60,6 +62,15 @@ class DeviceStore(context: Context) {
         }
     }
 
+    fun updateLastPresetName(deviceId: String, presetName: String?) {
+        val devices = getPairedDevices().toMutableList()
+        val idx = devices.indexOfFirst { it.deviceId == deviceId }
+        if (idx >= 0) {
+            devices[idx] = devices[idx].copy(lastPresetName = presetName)
+            save(devices)
+        }
+    }
+
     fun getLastConnectedDevice(): PairedDevice? {
         return getPairedDevices().maxByOrNull { it.lastConnected }
     }
@@ -74,6 +85,7 @@ class DeviceStore(context: Context) {
                 put("host", d.host)
                 put("port", d.port)
                 put("lastConnected", d.lastConnected)
+                if (d.lastPresetName != null) put("lastPresetName", d.lastPresetName)
             })
         }
         prefs.edit().putString("paired_devices", arr.toString()).apply()
