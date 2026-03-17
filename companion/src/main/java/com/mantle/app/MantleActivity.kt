@@ -2,8 +2,10 @@ package com.mantle.app
 
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -18,6 +20,7 @@ class MantleActivity : AppCompatActivity() {
     private val deviceStore get() = MantleApp.instance.deviceStore
 
     private lateinit var miniPlayer: MiniPlayerView
+    private var isNowPlayingVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,16 +44,26 @@ class MantleActivity : AppCompatActivity() {
         // Wire mini player
         miniPlayer.onPlayPauseClick = { viewModel.togglePlayPause() }
         miniPlayer.onBarClick = {
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, NowPlayingFragment())
-                .addToBackStack(null)
-                .commit()
+            if (!isNowPlayingVisible) {
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.fragmentContainer, NowPlayingFragment())
+                    .addToBackStack("now_playing")
+                    .commit()
+            }
+        }
+
+        // Hide mini player when NowPlayingFragment is visible
+        supportFragmentManager.addOnBackStackChangedListener {
+            val currentFragment = supportFragmentManager.findFragmentById(R.id.fragmentContainer)
+            isNowPlayingVisible = currentFragment is NowPlayingFragment
+            updateMiniPlayerVisibility()
         }
 
         // Observe state for mini player
         lifecycleScope.launch {
             viewModel.uiState.collect { state ->
                 miniPlayer.bind(state)
+                updateMiniPlayerVisibility()
             }
         }
     }
@@ -60,6 +73,13 @@ class MantleActivity : AppCompatActivity() {
         if (connectionManager.state == TvConnectionManager.ConnectionState.DISCONNECTED) {
             tryAutoConnect()
         }
+    }
+
+    private fun updateMiniPlayerVisibility() {
+        if (isNowPlayingVisible) {
+            miniPlayer.visibility = View.GONE
+        }
+        // When not in now-playing, visibility is controlled by MiniPlayerView.bind()
     }
 
     private fun tryAutoConnect() {
