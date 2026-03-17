@@ -7,14 +7,15 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
-import android.os.Handler
-import android.os.Looper
 import android.widget.ImageView
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -29,37 +30,37 @@ class WallpaperManager(
         private const val BASE_URL = "https://picsum.photos/1920/1080"
     }
 
-    private val handler = Handler(Looper.getMainLooper())
     private var imageCounter = 0
     private var intervalMs = 5 * 60 * 1000L
-    private var running = false
     private var hueRotation = 0f
-
-    private val rotationRunnable = object : Runnable {
-        override fun run() {
-            if (!running) return
-            loadNextWallpaper()
-            handler.postDelayed(this, intervalMs)
-        }
-    }
+    private var rotationJob: Job? = null
 
     fun start(intervalMinutes: Int) {
         intervalMs = intervalMinutes * 60 * 1000L
-        running = true
+        rotationJob?.cancel()
         loadNextWallpaper()
-        handler.postDelayed(rotationRunnable, intervalMs)
+        rotationJob = scope.launch {
+            while (isActive) {
+                delay(intervalMs)
+                loadNextWallpaper()
+            }
+        }
     }
 
     fun stop() {
-        running = false
-        handler.removeCallbacks(rotationRunnable)
+        rotationJob?.cancel()
     }
 
     fun updateInterval(intervalMinutes: Int) {
         intervalMs = intervalMinutes * 60 * 1000L
-        if (running) {
-            handler.removeCallbacks(rotationRunnable)
-            handler.postDelayed(rotationRunnable, intervalMs)
+        if (rotationJob?.isActive == true) {
+            rotationJob?.cancel()
+            rotationJob = scope.launch {
+                while (isActive) {
+                    delay(intervalMs)
+                    loadNextWallpaper()
+                }
+            }
         }
     }
 
@@ -94,24 +95,12 @@ class WallpaperManager(
     }
 
     private fun crossfadeTo(drawable: android.graphics.drawable.Drawable) {
-        // Move current front image to back
         backView.setImageDrawable(frontView.drawable)
         backView.alpha = 1f
-
-        // Set new image on front, start transparent
         frontView.setImageDrawable(drawable)
         frontView.alpha = 0f
-
-        // Crossfade
-        frontView.animate()
-            .alpha(1f)
-            .setDuration(CROSSFADE_DURATION_MS)
-            .start()
-
-        backView.animate()
-            .alpha(0f)
-            .setDuration(CROSSFADE_DURATION_MS)
-            .start()
+        frontView.animate().alpha(1f).setDuration(CROSSFADE_DURATION_MS).start()
+        backView.animate().alpha(0f).setDuration(CROSSFADE_DURATION_MS).start()
     }
 
     private fun showFallbackGradient() {
@@ -127,13 +116,11 @@ class WallpaperManager(
 
         paint.shader = LinearGradient(
             0f, 0f, 1920f, 1080f,
-            Color.HSVToColor(hsv1),
-            Color.HSVToColor(hsv2),
+            Color.HSVToColor(hsv1), Color.HSVToColor(hsv2),
             Shader.TileMode.CLAMP
         )
         canvas.drawRect(0f, 0f, 1920f, 1080f, paint)
 
-        val drawable = BitmapDrawable(frontView.resources, bitmap)
-        crossfadeTo(drawable)
+        crossfadeTo(BitmapDrawable(frontView.resources, bitmap))
     }
 }

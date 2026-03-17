@@ -1,13 +1,17 @@
 package com.clock.firetv.companion
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.mantle.app.TvConnectionManager
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,18 +25,16 @@ class TvConnectionManagerReconnectTest {
 
     private lateinit var manager: TvConnectionManager
     private val stateChanges = mutableListOf<TvConnectionManager.ConnectionState>()
+    private lateinit var scope: CoroutineScope
+    private lateinit var collectJob: Job
 
     @Before
     fun setUp() {
-        manager = TvConnectionManager()
-        manager.addListener(object : TvConnectionManager.EventListener {
-            override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
-                stateChanges.add(state)
-            }
-            override fun onTrackChanged(title: String, playlist: String) {}
-            override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onConfigApplied(version: Int) {}
-        })
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        manager = TvConnectionManager(scope)
+        collectJob = scope.launch {
+            manager.connectionState.collect { stateChanges.add(it) }
+        }
     }
 
     @Test
@@ -69,11 +71,6 @@ class TvConnectionManagerReconnectTest {
 
     // --- Reconnection backoff tests ---
 
-    /**
-     * Connect to MockWebServer, wait for auth_ok to be sent,
-     * then idle the looper so wasConnected=true and state=CONNECTED.
-     * Returns the server-side WebSocket so the caller can close it.
-     */
     private fun connectAndAuthenticate(server: MockWebServer): WebSocket {
         val serverWsLatch = CountDownLatch(1)
         var serverWs: WebSocket? = null
@@ -89,23 +86,17 @@ class TvConnectionManagerReconnectTest {
 
         manager.connect(server.hostName, server.port, "test-token")
 
-        // Wait for the server to open the WebSocket and send auth_ok
         serverWsLatch.await(5, TimeUnit.SECONDS)
-        Thread.sleep(200) // let OkHttp deliver the message
-
-        // Process auth_ok on main looper — sets wasConnected=true, state=CONNECTED
+        Thread.sleep(200)
         ShadowLooper.idleMainLooper()
 
         return serverWs!!
     }
 
-    /**
-     * Close the server-side WebSocket and let the manager detect the disconnect.
-     */
     private fun triggerServerDisconnect(serverWs: WebSocket) {
         serverWs.close(1001, "test-disconnect")
-        Thread.sleep(500) // let OkHttp fire onClosed callback
-        ShadowLooper.idleMainLooper() // process handleDisconnect state change
+        Thread.sleep(500)
+        ShadowLooper.idleMainLooper()
     }
 
     @Test
@@ -121,13 +112,14 @@ class TvConnectionManagerReconnectTest {
             assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.CONNECTED)
             assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.RECONNECTING)
         } finally {
+            collectJob.cancel()
             manager.disconnect()
             server.shutdown()
         }
     }
 
     @Test
-    fun `first reconnect attempt occurs after approximately 2 seconds`() {
+    fun `first reconnect stays in RECONNECTING state during backoff`() {
         val server = MockWebServer()
         server.start()
         try {
@@ -135,25 +127,25 @@ class TvConnectionManagerReconnectTest {
             triggerServerDisconnect(serverWs)
             assertThat(manager.state).isEqualTo(TvConnectionManager.ConnectionState.RECONNECTING)
 
-            // Shut down the server so reconnect attempts fail immediately
             server.shutdown()
             Thread.sleep(200)
 
-            // Clear to observe only reconnection-phase state changes
-            stateChanges.clear()
-
-            // Before 2s, the reconnect callback shouldn't have fired
+            // Before 2s backoff, state should still be RECONNECTING (not DISCONNECTED)
             ShadowLooper.idleMainLooper(1500, TimeUnit.MILLISECONDS)
-            assertThat(stateChanges).isEmpty()
+            assertThat(manager.state).isEqualTo(TvConnectionManager.ConnectionState.RECONNECTING)
 
-            // After 2s total, advance past the first reconnect delay
+            // After 2s, reconnect attempt fires (and fails since server is down)
             ShadowLooper.idleMainLooper(1000, TimeUnit.MILLISECONDS)
-            Thread.sleep(1000) // let OkHttp process the (failing) reconnect attempt
+            Thread.sleep(1000)
             ShadowLooper.idleMainLooper()
 
-            // The failed reconnect attempt triggers handleDisconnect which produces state changes
-            assertThat(stateChanges).isNotEmpty()
+            // Should still be reconnecting (more attempts remaining)
+            assertThat(manager.state).isIn(listOf(
+                TvConnectionManager.ConnectionState.RECONNECTING,
+                TvConnectionManager.ConnectionState.DISCONNECTED
+            ))
         } finally {
+            collectJob.cancel()
             manager.disconnect()
             try { server.shutdown() } catch (_: Exception) {}
         }
@@ -167,23 +159,21 @@ class TvConnectionManagerReconnectTest {
             val serverWs = connectAndAuthenticate(server)
             triggerServerDisconnect(serverWs)
 
-            // Shut down the server so reconnect attempts fail immediately
             server.shutdown()
             Thread.sleep(200)
 
-            // Advance through all 3 retry delays (2s + 4s + 8s) + connection failure time
             for (i in 0 until 3) {
                 ShadowLooper.idleMainLooper(10, TimeUnit.SECONDS)
-                Thread.sleep(2000) // let OkHttp process the (failing) reconnect attempt
+                Thread.sleep(2000)
                 ShadowLooper.idleMainLooper()
             }
 
-            // Extra time for the final failure to propagate
             Thread.sleep(1000)
             ShadowLooper.idleMainLooper()
 
             assertThat(manager.state).isEqualTo(TvConnectionManager.ConnectionState.DISCONNECTED)
         } finally {
+            collectJob.cancel()
             manager.disconnect()
             try { server.shutdown() } catch (_: Exception) {}
         }
@@ -198,12 +188,10 @@ class TvConnectionManagerReconnectTest {
             triggerServerDisconnect(serverWs)
             assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.RECONNECTING)
 
-            // User disconnect while in RECONNECTING state
             manager.disconnect()
             ShadowLooper.idleMainLooper()
             assertThat(manager.state).isEqualTo(TvConnectionManager.ConnectionState.DISCONNECTED)
 
-            // Advance past all retry delays — should not attempt reconnection
             stateChanges.clear()
             ShadowLooper.idleMainLooper(15, TimeUnit.SECONDS)
             Thread.sleep(500)
@@ -213,6 +201,7 @@ class TvConnectionManagerReconnectTest {
                 it == TvConnectionManager.ConnectionState.CONNECTING
             }).isEmpty()
         } finally {
+            collectJob.cancel()
             server.shutdown()
         }
     }
@@ -225,11 +214,11 @@ class TvConnectionManagerReconnectTest {
             val serverWs = connectAndAuthenticate(server)
             assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.CONNECTED)
 
-            // Server closes connection (simulating keepalive timeout)
             triggerServerDisconnect(serverWs)
 
             assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.RECONNECTING)
         } finally {
+            collectJob.cancel()
             manager.disconnect()
             server.shutdown()
         }

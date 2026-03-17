@@ -1,17 +1,23 @@
 package com.clock.firetv
 
 import android.animation.ValueAnimator
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 
-class DriftAnimator(private val targetView: View) {
+class DriftAnimator(
+    private val targetView: View,
+    private val scope: CoroutineScope
+) {
 
     companion object {
         private const val MAX_DRIFT = 30f
-        private const val DRIFT_INTERVAL_MS = 2 * 60 * 1000L // 2 minutes
+        private const val DRIFT_INTERVAL_MS = 2 * 60 * 1000L
         private const val ANIMATION_DURATION_MS = 8000L
 
         internal fun calculateDriftPosition(
@@ -25,27 +31,23 @@ class DriftAnimator(private val targetView: View) {
         }
     }
 
-    private val handler = Handler(Looper.getMainLooper())
     private var currentX = 0f
     private var currentY = 0f
-    private var running = false
+    private var driftJob: Job? = null
 
-    private val driftRunnable = object : Runnable {
-        override fun run() {
-            if (!running) return
-            driftToNewPosition()
-            handler.postDelayed(this, DRIFT_INTERVAL_MS)
+    fun start() {
+        driftJob?.cancel()
+        driftJob = scope.launch {
+            delay(DRIFT_INTERVAL_MS)
+            while (isActive) {
+                driftToNewPosition()
+                delay(DRIFT_INTERVAL_MS)
+            }
         }
     }
 
-    fun start() {
-        running = true
-        handler.postDelayed(driftRunnable, DRIFT_INTERVAL_MS)
-    }
-
     fun stop() {
-        running = false
-        handler.removeCallbacks(driftRunnable)
+        driftJob?.cancel()
     }
 
     fun reset() {

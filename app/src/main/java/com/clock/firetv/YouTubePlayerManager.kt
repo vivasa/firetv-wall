@@ -38,7 +38,12 @@ class YouTubePlayerManager(
         fun onTrackChanged(videoTitle: String?, playlistTitle: String?)
     }
 
+    interface OnPlaylistLoadedListener {
+        fun onPlaylistLoaded()
+    }
+
     var trackChangeListener: OnTrackChangeListener? = null
+    var playlistLoadedListener: OnPlaylistLoadedListener? = null
 
     private var player: ExoPlayer? = null
     private val streamResolver = StreamResolver()
@@ -140,6 +145,7 @@ class YouTubePlayerManager(
         }
         pendingResumeIndex = -1
         currentVideoUrl = playlistVideoUrls[currentIndex]
+        withContext(Dispatchers.Main) { playlistLoadedListener?.onPlaylistLoaded() }
         resolveAndPlay(playlistVideoUrls[currentIndex])
     }
 
@@ -162,6 +168,7 @@ class YouTubePlayerManager(
         }
         pendingResumeIndex = -1
         currentVideoUrl = playlistVideoUrls[currentIndex]
+        withContext(Dispatchers.Main) { playlistLoadedListener?.onPlaylistLoaded() }
         resolveAndPlay(playlistVideoUrls[currentIndex])
     }
 
@@ -292,6 +299,24 @@ class YouTubePlayerManager(
             exo.seekTo(newPos)
         }
     }
+
+    fun playTrackAtIndex(index: Int) {
+        if (index < 0 || index >= playlistVideoUrls.size) return
+        currentIndex = index
+        currentVideoUrl = playlistVideoUrls[index]
+        currentLoadJob?.cancel()
+        currentLoadJob = scope.launch {
+            resolveAndPlay(playlistVideoUrls[index])
+        }
+    }
+
+    fun getTrackList(): List<Pair<Int, String?>> {
+        return playlistVideoTitles.mapIndexed { index, title -> Pair(index, title) }
+    }
+
+    fun getCurrentIndex(): Int = currentIndex
+
+    fun getPlaylistTitle(): String? = currentPlaylistTitle
 
     fun hasPlaylist(): Boolean = playlistVideoUrls.isNotEmpty()
 

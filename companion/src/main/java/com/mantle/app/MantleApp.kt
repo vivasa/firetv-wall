@@ -1,6 +1,10 @@
 package com.mantle.app
 
 import android.app.Application
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class MantleApp : Application() {
 
@@ -13,14 +17,27 @@ class MantleApp : Application() {
     lateinit var deviceStore: DeviceStore
         private set
 
+    lateinit var configSyncManager: ConfigSyncManager
+        private set
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     override fun onCreate() {
         super.onCreate()
         instance = this
-        configStore = MantleConfigStore(this)
+        configStore = MantleConfigStore(this, appScope)
         deviceStore = DeviceStore(this)
-        connectionManager = TvConnectionManager()
+        connectionManager = TvConnectionManager(appScope)
         connectionManager.appContext = this
-        connectionManager.registerConfigListener()
+        configSyncManager = ConfigSyncManager(configStore, appScope) { json ->
+            connectionManager.send(json)
+        }
+        configStore.addListener(configSyncManager)
+        appScope.launch {
+            connectionManager.connectionState.collect { state ->
+                configSyncManager.setConnected(state == TvConnectionManager.ConnectionState.CONNECTED)
+            }
+        }
     }
 
     companion object {

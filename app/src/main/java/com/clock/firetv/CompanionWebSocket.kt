@@ -1,18 +1,22 @@
 package com.clock.firetv
 
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import com.firetv.protocol.ProtocolEvents
 import com.firetv.protocol.ProtocolKeys
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoWSD
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.IOException
-import java.util.concurrent.Executors
 
 class CompanionWebSocket(
-    port: Int
+    port: Int,
+    private val scope: CoroutineScope
 ) : NanoWSD(port) {
 
     companion object {
@@ -24,8 +28,6 @@ class CompanionWebSocket(
 
     val actualPort: Int get() = listeningPort
 
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val sendExecutor = Executors.newSingleThreadExecutor()
     private var activeSocket: CompanionSocket? = null
 
     fun startServer() {
@@ -39,13 +41,13 @@ class CompanionWebSocket(
     inner class CompanionSocket(handshake: NanoHTTPD.IHTTPSession) : WebSocket(handshake), ClientTransport {
 
         private var lastMessageTime = System.currentTimeMillis()
-        private val timeoutChecker = Runnable { checkTimeout() }
+        private var timeoutJob: Job? = null
 
         // -- ClientTransport --
 
         override fun sendEvent(json: JSONObject) {
             val text = json.toString()
-            sendExecutor.execute {
+            scope.launch(Dispatchers.IO) {
                 try {
                     send(text)
                 } catch (e: IOException) {
@@ -85,7 +87,7 @@ class CompanionWebSocket(
                 activeSocket = null
                 transportListener?.onClientDisconnected(this, reason ?: "closed")
             }
-            mainHandler.removeCallbacks(timeoutChecker)
+            timeoutJob?.cancel()
         }
 
         override fun onMessage(message: WebSocketFrame) {
@@ -105,17 +107,18 @@ class CompanionWebSocket(
         // -- Timeout --
 
         private fun scheduleTimeoutCheck() {
-            mainHandler.postDelayed(timeoutChecker, TIMEOUT_MS)
-        }
-
-        private fun checkTimeout() {
-            if (System.currentTimeMillis() - lastMessageTime > TIMEOUT_MS) {
-                Log.i(TAG, "[CompanionWS] event=timeout detail=inactive_30s")
-                try {
-                    close(WebSocketFrame.CloseCode.GoingAway, "timeout", false)
-                } catch (e: Exception) { /* ignore */ }
-            } else {
-                scheduleTimeoutCheck()
+            timeoutJob?.cancel()
+            timeoutJob = scope.launch {
+                while (isActive) {
+                    delay(TIMEOUT_MS)
+                    if (System.currentTimeMillis() - lastMessageTime > TIMEOUT_MS) {
+                        Log.i(TAG, "[CompanionWS] event=timeout detail=inactive_30s")
+                        try {
+                            close(WebSocketFrame.CloseCode.GoingAway, "timeout", false)
+                        } catch (e: Exception) { /* ignore */ }
+                        break
+                    }
+                }
             }
         }
     }

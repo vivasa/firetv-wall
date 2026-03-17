@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/mantle_surface"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_lg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Select Device"
+        android:textAppearance="@style/TextAppearance.Mantle.Heading" />
+
+    <LinearLayout
+        android:id="@+id/deviceListContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:orientation="vertical" />
+
+    <TextView
+        android:id="@+id/btnSheetAddDevice"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:background="?attr/selectableItemBackground"
+        android:gravity="center_vertical"
+        android:text="Add new device"
+        android:textAppearance="@style/TextAppearance.Mantle.Body"
+        android:textColor="@color/mantle_accent" />
+
+</LinearLayout>

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/mantle_background">
+
+    <!-- Welcome step -->
+    <LinearLayout
+        android:id="@+id/stepWelcome"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_xxl">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mantle"
+            android:textAppearance="@style/TextAppearance.Mantle.Title"
+            android:textSize="32sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:text="Control your Fire TV clock"
+            android:textAppearance="@style/TextAppearance.Mantle.Caption" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGetStarted"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xxl"
+            android:text="Get Started"
+            android:backgroundTint="@color/mantle_accent"
+            android:textColor="@color/mantle_on_accent" />
+    </LinearLayout>
+
+    <!-- Discovery step -->
+    <LinearLayout
+        android:id="@+id/stepDiscovery"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_xl"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Connect to your Fire TV"
+            android:textAppearance="@style/TextAppearance.Mantle.Title" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:text="Searching for devices on your network..."
+            android:textAppearance="@style/TextAppearance.Mantle.Caption" />
+
+        <ProgressBar
+            android:id="@+id/discoveryProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:indeterminate="true" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/onboardingDeviceList"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnManualEntry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="@dimen/spacing_md"
+                android:text="Enter IP manually"
+                android:textAppearance="@style/TextAppearance.Mantle.Caption"
+                android:textColor="@color/mantle_accent" />
+
+            <View
+                android:layout_width="@dimen/spacing_xl"
+                android:layout_height="0dp" />
+
+            <TextView
+                android:id="@+id/btnSkipOnboarding"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="@dimen/spacing_md"
+                android:text="Skip for now"
+                android:textAppearance="@style/TextAppearance.Mantle.Caption"
+                android:textColor="@color/mantle_on_surface_muted" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Completion step -->
+    <LinearLayout
+        android:id="@+id/stepComplete"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_xxl"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/completionTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Mantle.Title"
+            tools:text="Connected to Living Room TV" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStartListening"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xxl"
+            android:text="Start Listening"
+            android:backgroundTint="@color/mantle_accent"
+            android:textColor="@color/mantle_on_accent" />
+    </LinearLayout>
+</FrameLayout>

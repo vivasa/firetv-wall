@@ -20,6 +20,9 @@ object ProtocolKeys {
     const val PRESET_INDEX = "presetIndex"
     const val OFFSET_SEC = "offsetSec"
     const val DIRECTION = "direction"
+    const val TRACK_INDEX = "trackIndex"
+    const val TRACKS = "tracks"
+    const val CURRENT_INDEX = "currentIndex"
 
     // Envelope
     const val DATA = "data"

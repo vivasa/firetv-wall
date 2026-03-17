@@ -12,6 +12,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
@@ -20,23 +25,23 @@ class WebSocketAuthIntegrationTest {
     private lateinit var manager: TvConnectionManager
     private lateinit var server: MockWebServer
     private val stateChanges = mutableListOf<TvConnectionManager.ConnectionState>()
+    private lateinit var scope: CoroutineScope
+    private lateinit var collectJob: Job
+
     @Before
     fun setUp() {
-        manager = TvConnectionManager()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        manager = TvConnectionManager(scope)
         server = MockWebServer()
-        manager.addListener(object : TvConnectionManager.EventListener {
-            override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
-                stateChanges.add(state)
-            }
-            override fun onTrackChanged(title: String, playlist: String) {}
-            override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onConfigApplied(version: Int) {}
-        })
+        collectJob = scope.launch {
+            manager.connectionState.collect { stateChanges.add(it) }
+        }
     }
 
     @After
     fun tearDown() {
         try {
+            collectJob.cancel()
             manager.disconnect()
             server.shutdown()
         } catch (_: Exception) {}

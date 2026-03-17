@@ -1,6 +1,5 @@
 package com.mantle.app
 
-import android.bluetooth.BluetoothDevice
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,19 +12,6 @@ class DeviceAdapter(
     private val onAction: (DeviceItem) -> Unit,
     private val onLongPress: (DeviceItem) -> Unit
 ) : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
-
-    enum class TransportType { NSD, BLE }
-
-    data class DeviceItem(
-        val deviceId: String,
-        val deviceName: String,
-        val host: String,
-        val port: Int,
-        val isPaired: Boolean,
-        val storedToken: String? = null,
-        val transportType: TransportType = TransportType.NSD,
-        val bleDevice: BluetoothDevice? = null
-    )
 
     private val items = mutableListOf<DeviceItem>()
     private var connectedDeviceId: String? = null

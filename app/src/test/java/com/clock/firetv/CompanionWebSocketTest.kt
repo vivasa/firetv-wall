@@ -16,6 +16,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -67,6 +71,7 @@ class CompanionWebSocketTest {
     private lateinit var settings: SettingsManager
     private lateinit var identity: DeviceIdentity
     private lateinit var okClient: OkHttpClient
+    private lateinit var testScope: CoroutineScope
     private var capturedPin: String? = null
     private var pinDismissed = false
     private var companionConnected = false
@@ -83,6 +88,8 @@ class CompanionWebSocketTest {
         override fun onSeek(offsetSec: Int) {}
         override fun onSkip(direction: Int) {}
         override fun onSyncConfig(config: JSONObject) {}
+        override fun onPlayTrack(trackIndex: Int) {}
+        override fun onGetPlaylistTracks() {}
     }
 
     @Before
@@ -96,17 +103,20 @@ class CompanionWebSocketTest {
             .readTimeout(5, TimeUnit.SECONDS)
             .build()
 
-        commandHandler = CompanionCommandHandler(settings, identity)
+        testScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        commandHandler = CompanionCommandHandler(settings, identity, testScope)
         commandHandler.listener = testListener
-        server = CompanionWebSocket(0)
+        server = CompanionWebSocket(0, testScope)
         server.transportListener = commandHandler
         server.startServer()
     }
 
     @After
     fun tearDown() {
+        testScope.cancel()
         try { server.stop() } catch (_: Exception) {}
         okClient.dispatcher.executorService.shutdown()
+        okClient.connectionPool.evictAll()
     }
 
     private fun connectClient(): Pair<WebSocket, CopyOnWriteArrayList<String>> {

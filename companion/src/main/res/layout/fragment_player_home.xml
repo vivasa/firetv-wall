@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/mantle_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Top bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/spacing_lg"
+            android:paddingEnd="@dimen/spacing_sm">
+
+            <!-- Connection indicator dot -->
+            <View
+                android:id="@+id/connectionDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/circle_indicator" />
+
+            <!-- Device name chip -->
+            <TextView
+                android:id="@+id/deviceNameChip"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/spacing_sm"
+                android:layout_weight="1"
+                android:textAppearance="@style/TextAppearance.Mantle.Heading"
+                tools:text="Living Room TV" />
+
+            <!-- Settings gear -->
+            <ImageButton
+                android:id="@+id/btnSettings"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Settings"
+                android:src="@drawable/ic_settings"
+                app:tint="@color/mantle_on_surface_muted" />
+        </LinearLayout>
+
+        <!-- Connection lost banner -->
+        <TextView
+            android:id="@+id/connectionBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/mantle_surface_elevated"
+            android:gravity="center"
+            android:padding="@dimen/spacing_sm"
+            android:text="Connection lost. Tap to reconnect."
+            android:textAppearance="@style/TextAppearance.Mantle.Caption"
+            android:textColor="@color/warning_yellow"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <!-- Scrollable content -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/playlistRecycler"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingBottom="64dp" />
+
+        <!-- Empty state -->
+        <LinearLayout
+            android:id="@+id/emptyState"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No playlists yet"
+                android:textAppearance="@style/TextAppearance.Mantle.Title" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:text="Add a YouTube playlist to get started"
+                android:textAppearance="@style/TextAppearance.Mantle.Caption" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- FAB -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAdd"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="@dimen/spacing_lg"
+        android:layout_marginBottom="72dp"
+        android:contentDescription="Add playlist"
+        android:src="@drawable/ic_add"
+        app:backgroundTint="@color/mantle_accent"
+        app:tint="@color/mantle_on_accent" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

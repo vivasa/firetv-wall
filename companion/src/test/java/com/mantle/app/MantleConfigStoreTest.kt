@@ -9,6 +9,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 @RunWith(RobolectricTestRunner::class)
 class MantleConfigStoreTest {
@@ -21,7 +24,7 @@ class MantleConfigStoreTest {
         context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences("mantle_config", Context.MODE_PRIVATE)
             .edit().clear().commit()
-        store = MantleConfigStore(context)
+        store = MantleConfigStore(context, CoroutineScope(SupervisorJob() + Dispatchers.Main))
     }
 
     // --- Default initialization ---
@@ -69,7 +72,7 @@ class MantleConfigStoreTest {
         store.setWallpaperInterval(10)
         store.addPreset(Preset("Test", "http://example.com"))
 
-        val reloaded = MantleConfigStore(context)
+        val reloaded = MantleConfigStore(context, CoroutineScope(SupervisorJob() + Dispatchers.Main))
         assertThat(reloaded.config.clock.theme).isEqualTo(2)
         assertThat(reloaded.config.clock.primaryTimezone).isEqualTo("Europe/London")
         assertThat(reloaded.config.wallpaper.intervalMinutes).isEqualTo(10)
@@ -81,7 +84,7 @@ class MantleConfigStoreTest {
     fun `corrupt JSON fallback returns defaults`() {
         context.getSharedPreferences("mantle_config", Context.MODE_PRIVATE)
             .edit().putString("config", "not valid json!!!").commit()
-        val freshStore = MantleConfigStore(context)
+        val freshStore = MantleConfigStore(context, CoroutineScope(SupervisorJob() + Dispatchers.Main))
         assertThat(freshStore.config.version).isEqualTo(1)
         assertThat(freshStore.config.clock.theme).isEqualTo(0)
     }
@@ -225,6 +228,87 @@ class MantleConfigStoreTest {
         assertThat(presets.length()).isEqualTo(1)
         assertThat(presets.getJSONObject(0).getString("name")).isEqualTo("Music")
         assertThat(presets.getJSONObject(0).getString("url")).isEqualTo("http://music.com")
+    }
+
+    // --- Preset artwork and lastPlayed ---
+
+    @Test
+    fun `preset artworkUrl and lastPlayed serialize round-trip`() {
+        store.addPreset(Preset("Test", "http://test.com", artworkUrl = "http://img.com/thumb.jpg", lastPlayed = 1700000000L))
+        val reloaded = MantleConfigStore(context, CoroutineScope(SupervisorJob() + Dispatchers.Main))
+        val preset = reloaded.config.player.presets[0]
+        assertThat(preset.artworkUrl).isEqualTo("http://img.com/thumb.jpg")
+        assertThat(preset.lastPlayed).isEqualTo(1700000000L)
+    }
+
+    @Test
+    fun `legacy JSON without artworkUrl and lastPlayed loads with defaults`() {
+        val legacyJson = JSONObject().apply {
+            put("version", 1)
+            put("clock", JSONObject().apply { put("theme", 0) })
+            put("wallpaper", JSONObject().apply { put("enabled", true) })
+            put("chime", JSONObject().apply { put("enabled", true) })
+            put("player", JSONObject().apply {
+                put("size", 1)
+                put("visible", true)
+                put("activePreset", 0)
+                put("presets", org.json.JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("name", "OldPreset")
+                        put("url", "http://old.com")
+                    })
+                })
+            })
+        }
+        context.getSharedPreferences("mantle_config", Context.MODE_PRIVATE)
+            .edit().putString("config", legacyJson.toString()).commit()
+        val freshStore = MantleConfigStore(context, CoroutineScope(SupervisorJob() + Dispatchers.Main))
+        val preset = freshStore.config.player.presets[0]
+        assertThat(preset.name).isEqualTo("OldPreset")
+        assertThat(preset.artworkUrl).isNull()
+        assertThat(preset.lastPlayed).isEqualTo(0)
+    }
+
+    @Test
+    fun `setPresetLastPlayed updates only timestamp`() {
+        store.addPreset(Preset("Test", "http://test.com"))
+        store.setPresetLastPlayed(0, 1700000000L)
+        assertThat(store.config.player.presets[0].lastPlayed).isEqualTo(1700000000L)
+        assertThat(store.config.player.presets[0].name).isEqualTo("Test")
+    }
+
+    @Test
+    fun `setPresetArtworkUrl updates only artworkUrl`() {
+        store.addPreset(Preset("Test", "http://test.com"))
+        store.setPresetArtworkUrl(0, "http://img.com/art.jpg")
+        assertThat(store.config.player.presets[0].artworkUrl).isEqualTo("http://img.com/art.jpg")
+        assertThat(store.config.player.presets[0].name).isEqualTo("Test")
+    }
+
+    @Test
+    fun `setPresetLastPlayed out of bounds is no-op`() {
+        store.addPreset(Preset("Test", "http://test.com"))
+        store.setPresetLastPlayed(-1, 1700000000L)
+        store.setPresetLastPlayed(5, 1700000000L)
+        assertThat(store.config.player.presets[0].lastPlayed).isEqualTo(0)
+    }
+
+    @Test
+    fun `toJson includes artworkUrl and lastPlayed when set`() {
+        store.addPreset(Preset("Test", "http://test.com", artworkUrl = "http://art.com/img.jpg", lastPlayed = 12345L))
+        val json = store.toJson()
+        val preset = json.getJSONObject("player").getJSONArray("presets").getJSONObject(0)
+        assertThat(preset.getString("artworkUrl")).isEqualTo("http://art.com/img.jpg")
+        assertThat(preset.getLong("lastPlayed")).isEqualTo(12345L)
+    }
+
+    @Test
+    fun `toJson omits artworkUrl and lastPlayed when defaults`() {
+        store.addPreset(Preset("Test", "http://test.com"))
+        val json = store.toJson()
+        val preset = json.getJSONObject("player").getJSONArray("presets").getJSONObject(0)
+        assertThat(preset.has("artworkUrl")).isFalse()
+        assertThat(preset.has("lastPlayed")).isFalse()
     }
 
     // --- Listener notification ---

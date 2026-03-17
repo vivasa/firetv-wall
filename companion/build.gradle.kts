@@ -44,12 +44,18 @@ android {
 dependencies {
     implementation(project(":protocol"))
     implementation("androidx.core:core-ktx:1.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
 
     // OkHttp for WebSocket client
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Coil for image loading
+    implementation("io.coil-kt:coil:2.6.0")
 
     // Unit test dependencies
     testImplementation("junit:junit:4.13.2")
@@ -57,6 +63,7 @@ dependencies {
     testImplementation("com.google.truth:truth:1.4.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("androidx.test:core:1.5.0")
 
     // Instrumentation test dependencies

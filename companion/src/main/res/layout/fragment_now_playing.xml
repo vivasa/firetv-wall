@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/mantle_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_lg">
+
+        <!-- Top bar: down arrow + device chip -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Close"
+                android:src="@drawable/ic_arrow_down" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/deviceChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/mantle_on_surface"
+                app:chipBackgroundColor="@color/mantle_surface_elevated"
+                app:chipCornerRadius="16dp"
+                tools:text="Living Room TV" />
+        </LinearLayout>
+
+        <!-- Large artwork -->
+        <ImageView
+            android:id="@+id/largeArtwork"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="@dimen/spacing_xl"
+            android:adjustViewBounds="true"
+            android:contentDescription="Playlist artwork"
+            android:scaleType="centerCrop"
+            tools:background="@color/mantle_accent" />
+
+        <!-- Track title -->
+        <TextView
+            android:id="@+id/trackTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xl"
+            android:textAppearance="@style/TextAppearance.Mantle.Title"
+            tools:text="Jazz Standards Vol. 2" />
+
+        <!-- Playlist name -->
+        <TextView
+            android:id="@+id/playlistName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xs"
+            android:textAppearance="@style/TextAppearance.Mantle.Caption"
+            tools:text="Jazz Standards" />
+
+        <!-- Transport controls -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xxl"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnSkipPrev"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Previous"
+                android:src="@drawable/ic_skip_prev"
+                app:tint="@color/mantle_on_surface_muted" />
+
+            <ImageButton
+                android:id="@+id/btnRewind"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="@dimen/spacing_lg"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Rewind"
+                android:src="@drawable/ic_rewind"
+                app:tint="@color/mantle_on_surface_muted" />
+
+            <ImageButton
+                android:id="@+id/btnPlayPause"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="@dimen/spacing_xl"
+                android:layout_marginEnd="@dimen/spacing_xl"
+                android:background="@drawable/bg_play_button"
+                android:contentDescription="Play or pause"
+                android:src="@drawable/ic_play"
+                app:tint="@color/mantle_on_accent" />
+
+            <ImageButton
+                android:id="@+id/btnForward"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Forward"
+                android:src="@drawable/ic_forward"
+                app:tint="@color/mantle_on_surface_muted" />
+
+            <ImageButton
+                android:id="@+id/btnSkipNext"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="@dimen/spacing_lg"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Next"
+                android:src="@drawable/ic_skip_next"
+                app:tint="@color/mantle_on_surface_muted" />
+        </LinearLayout>
+
+        <!-- Track list -->
+        <TextView
+            android:id="@+id/trackListHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xl"
+            android:text="Tracks"
+            android:textAppearance="@style/TextAppearance.Mantle.Caption"
+            android:textColor="@color/mantle_on_surface_muted"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/trackListRecycler"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:nestedScrollingEnabled="false"
+            android:visibility="gone"
+            tools:itemCount="5"
+            tools:listitem="@layout/item_playlist_row" />
+
+        <!-- Sleep timer button -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xl"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnSleepTimer"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Sleep timer"
+                android:src="@drawable/ic_moon" />
+
+            <TextView
+                android:id="@+id/sleepTimerLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/spacing_sm"
+                android:textAppearance="@style/TextAppearance.Mantle.Caption"
+                android:visibility="gone"
+                tools:text="30 min"
+                tools:visibility="visible" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

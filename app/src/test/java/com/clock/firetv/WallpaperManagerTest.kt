@@ -7,7 +7,8 @@ import android.widget.ImageView
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -45,7 +46,7 @@ class WallpaperManagerTest {
     @Test
     fun `start triggers immediate wallpaper load`() {
         manager.start(5)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         // After start, a load is triggered — frontView should have some drawable set
         // (either from network or fallback gradient since network will fail in test)
@@ -56,14 +57,14 @@ class WallpaperManagerTest {
     @Test
     fun `stop prevents further rotation`() {
         manager.start(1)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
         manager.stop()
 
         // Advance past multiple intervals — no crash, no further activity
-        ShadowLooper.idleMainLooper(5, TimeUnit.MINUTES)
-        testScope.advanceUntilIdle()
+        testScope.advanceTimeBy(5 * 60 * 1000L)
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         // If stop didn't work, the rotation runnable would keep firing
         assertThat(true).isTrue()
@@ -72,14 +73,13 @@ class WallpaperManagerTest {
     @Test
     fun `start sets correct interval`() {
         manager.start(10)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
-        // Advance by 9 minutes — should not trigger second rotation
         // Advance by 10 minutes — should trigger second rotation
         // Since the network call fails in test, we verify through fallback behavior
-        ShadowLooper.idleMainLooper(10, TimeUnit.MINUTES)
-        testScope.advanceUntilIdle()
+        testScope.advanceTimeBy(10 * 60 * 1000L)
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         // No crash means the interval logic works
         assertThat(true).isTrue()
@@ -90,12 +90,12 @@ class WallpaperManagerTest {
     @Test
     fun `rotation fires after configured interval`() {
         manager.start(1)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
         // Advance by 1 minute to trigger rotation
-        ShadowLooper.idleMainLooper(1, TimeUnit.MINUTES)
-        testScope.advanceUntilIdle()
+        testScope.advanceTimeBy(1 * 60 * 1000L)
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         // Second load triggered without error
         assertThat(true).isTrue()
@@ -104,13 +104,13 @@ class WallpaperManagerTest {
     @Test
     fun `multiple rotations fire at each interval tick`() {
         manager.start(1)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
         // Advance through 3 interval ticks
         repeat(3) {
-            ShadowLooper.idleMainLooper(1, TimeUnit.MINUTES)
-            testScope.advanceUntilIdle()
+            testScope.advanceTimeBy(1 * 60 * 1000L)
+            testScope.runCurrent()
             ShadowLooper.idleMainLooper()
         }
         // Should have attempted 4 total loads (1 immediate + 3 interval)
@@ -122,14 +122,14 @@ class WallpaperManagerTest {
     @Test
     fun `updateInterval while running reschedules`() {
         manager.start(5)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
         manager.updateInterval(1)
 
         // After 1 minute, rotation should fire (new interval)
-        ShadowLooper.idleMainLooper(1, TimeUnit.MINUTES)
-        testScope.advanceUntilIdle()
+        testScope.advanceTimeBy(1 * 60 * 1000L)
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         assertThat(true).isTrue()
     }
@@ -139,8 +139,8 @@ class WallpaperManagerTest {
         manager.updateInterval(1)
 
         // Advance past interval — nothing should happen
-        ShadowLooper.idleMainLooper(5, TimeUnit.MINUTES)
-        testScope.advanceUntilIdle()
+        testScope.advanceTimeBy(5 * 60 * 1000L)
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         // No crash or unexpected behavior
         assertThat(true).isTrue()
@@ -155,7 +155,7 @@ class WallpaperManagerTest {
         frontView.alpha = 1f
 
         manager.start(5)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
         // After a load attempt (success or fallback), crossfade is triggered
@@ -172,10 +172,10 @@ class WallpaperManagerTest {
         // In test environment, the Coil ImageLoader will fail (no real network)
         // So the fallback gradient should be triggered
         manager.start(5)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         Thread.sleep(500)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
         // frontView should have a BitmapDrawable (gradient) after fallback
@@ -188,19 +188,19 @@ class WallpaperManagerTest {
     @Test
     fun `gradient hue rotation advances by 30 degrees and wraps`() {
         manager.start(1)
-        testScope.advanceUntilIdle()
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
 
         // Trigger multiple rotations — each fallback gradient advances hue by 30
         repeat(12) {
-            ShadowLooper.idleMainLooper(1, TimeUnit.MINUTES)
-            testScope.advanceUntilIdle()
+            testScope.advanceTimeBy(1 * 60 * 1000L)
+            testScope.runCurrent()
             ShadowLooper.idleMainLooper()
         }
         // After 12 rotations * 30 degrees = 360, hue wraps to 0
         // 13th load starts at hue 0 again — no crash
-        ShadowLooper.idleMainLooper(1, TimeUnit.MINUTES)
-        testScope.advanceUntilIdle()
+        testScope.advanceTimeBy(1 * 60 * 1000L)
+        testScope.runCurrent()
         ShadowLooper.idleMainLooper()
         assertThat(true).isTrue()
     }

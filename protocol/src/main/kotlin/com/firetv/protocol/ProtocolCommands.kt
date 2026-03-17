@@ -14,4 +14,6 @@ object ProtocolCommands {
     const val SKIP = "skip"
     const val SYNC_CONFIG = "sync_config"
     const val GET_STATE = "get_state"
+    const val GET_PLAYLIST_TRACKS = "get_playlist_tracks"
+    const val PLAY_TRACK = "play_track"
 }

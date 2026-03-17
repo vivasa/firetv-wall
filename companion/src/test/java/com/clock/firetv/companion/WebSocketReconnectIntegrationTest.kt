@@ -12,6 +12,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
@@ -20,24 +25,23 @@ class WebSocketReconnectIntegrationTest {
     private lateinit var manager: TvConnectionManager
     private lateinit var server: MockWebServer
     private val stateChanges = mutableListOf<TvConnectionManager.ConnectionState>()
+    private lateinit var scope: CoroutineScope
+    private lateinit var collectJob: Job
 
     @Before
     fun setUp() {
-        manager = TvConnectionManager()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        manager = TvConnectionManager(scope)
         server = MockWebServer()
-        manager.addListener(object : TvConnectionManager.EventListener {
-            override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
-                stateChanges.add(state)
-            }
-            override fun onTrackChanged(title: String, playlist: String) {}
-            override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onConfigApplied(version: Int) {}
-        })
+        collectJob = scope.launch {
+            manager.connectionState.collect { stateChanges.add(it) }
+        }
     }
 
     @After
     fun tearDown() {
         try {
+            collectJob.cancel()
             manager.disconnect()
             server.shutdown()
         } catch (_: Exception) {}
@@ -91,7 +95,6 @@ class WebSocketReconnectIntegrationTest {
         ShadowLooper.idleMainLooper()
 
         // Shut down server so reconnects fail
-        val port = server.port
         server.shutdown()
         Thread.sleep(500)
 
@@ -101,7 +104,6 @@ class WebSocketReconnectIntegrationTest {
         ShadowLooper.idleMainLooper()
 
         // Wait for retry attempts (2s + 4s + 8s delays + connection timeouts)
-        // Run the main looper to process delayed reconnect handlers
         for (i in 0..5) {
             ShadowLooper.idleMainLooper()
             Thread.sleep(3000)
@@ -109,8 +111,6 @@ class WebSocketReconnectIntegrationTest {
         ShadowLooper.idleMainLooper()
 
         // Should eventually reach DISCONNECTED after all retries
-        val lastState = stateChanges.lastOrNull()
-        // It should be DISCONNECTED or RECONNECTING (depending on timing)
         assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.RECONNECTING)
     }
 }

@@ -8,13 +8,15 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class ConnectionDiagnosticsFragment : Fragment(), TvConnectionManager.EventListener {
+class ConnectionDiagnosticsFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var emptyText: TextView
@@ -39,18 +41,22 @@ class ConnectionDiagnosticsFragment : Fragment(), TvConnectionManager.EventListe
         }
 
         refreshEvents()
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            connectionManager.connectionState.collect {
+                refreshEvents()
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
         ConnectionEventLog.restoreFromPrefs(requireContext())
-        connectionManager.addListener(this)
         refreshEvents()
     }
 
     override fun onPause() {
         super.onPause()
-        connectionManager.removeListener(this)
         ConnectionEventLog.persistToPrefs(requireContext())
     }
 
@@ -60,16 +66,6 @@ class ConnectionDiagnosticsFragment : Fragment(), TvConnectionManager.EventListe
         emptyText.visibility = if (events.isEmpty()) View.VISIBLE else View.GONE
         recyclerView.visibility = if (events.isEmpty()) View.GONE else View.VISIBLE
     }
-
-    // --- TvConnectionManager.EventListener ---
-
-    override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
-        refreshEvents()
-    }
-
-    override fun onTrackChanged(title: String, playlist: String) {}
-    override fun onPlaybackStateChanged(playing: Boolean) {}
-    override fun onConfigApplied(version: Int) {}
 
     // --- Adapter ---
 

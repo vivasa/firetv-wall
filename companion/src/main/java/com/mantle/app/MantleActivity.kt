@@ -2,9 +2,10 @@ package com.mantle.app
 
 import android.os.Bundle
 import android.util.Log
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.Fragment
-import com.google.android.material.bottomnavigation.BottomNavigationView
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MantleActivity : AppCompatActivity() {
 
@@ -12,48 +13,50 @@ class MantleActivity : AppCompatActivity() {
         private const val TAG = "MantleActivity"
     }
 
-    private val homeFragment = HomeFragment()
-    private val musicFragment = MusicFragment()
-    private val tvFragment = TvFragment()
-    private var activeFragment: Fragment = homeFragment
-
+    private val viewModel: PlayerViewModel by viewModels()
     private val connectionManager get() = MantleApp.instance.connectionManager
     private val deviceStore get() = MantleApp.instance.deviceStore
+
+    private lateinit var miniPlayer: MiniPlayerView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        miniPlayer = findViewById(R.id.miniPlayer)
+
         if (savedInstanceState == null) {
-            supportFragmentManager.beginTransaction()
-                .add(R.id.fragmentContainer, tvFragment, "tv").hide(tvFragment)
-                .add(R.id.fragmentContainer, musicFragment, "music").hide(musicFragment)
-                .add(R.id.fragmentContainer, homeFragment, "home")
-                .commit()
-        }
-
-        val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-        bottomNav.setOnItemSelectedListener { item ->
-            val target = when (item.itemId) {
-                R.id.nav_home -> homeFragment
-                R.id.nav_music -> musicFragment
-                R.id.nav_tv -> tvFragment
-                else -> return@setOnItemSelectedListener false
+            val needsOnboarding = deviceStore.getPairedDevices().isEmpty()
+            if (needsOnboarding) {
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.fragmentContainer, OnboardingFragment())
+                    .commit()
+            } else {
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.fragmentContainer, PlayerHomeFragment())
+                    .commit()
             }
-            supportFragmentManager.beginTransaction()
-                .hide(activeFragment)
-                .show(target)
-                .commit()
-            activeFragment = target
-            true
         }
 
-        // Home tab is default (already selected in layout)
+        // Wire mini player
+        miniPlayer.onPlayPauseClick = { viewModel.togglePlayPause() }
+        miniPlayer.onBarClick = {
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.fragmentContainer, NowPlayingFragment())
+                .addToBackStack(null)
+                .commit()
+        }
+
+        // Observe state for mini player
+        lifecycleScope.launch {
+            viewModel.uiState.collect { state ->
+                miniPlayer.bind(state)
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        // Auto-connect to last device on resume
         if (connectionManager.state == TvConnectionManager.ConnectionState.DISCONNECTED) {
             tryAutoConnect()
         }
@@ -64,10 +67,5 @@ class MantleActivity : AppCompatActivity() {
         val lastDevice = deviceStore.getLastConnectedDevice() ?: return
         Log.d(TAG, "Auto-connecting to ${lastDevice.deviceName} (${lastDevice.host}:${lastDevice.port})")
         connectionManager.connect(lastDevice.host, lastDevice.port, lastDevice.token)
-    }
-
-    fun switchToTv() {
-        val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNav)
-        bottomNav.selectedItemId = R.id.nav_tv
     }
 }

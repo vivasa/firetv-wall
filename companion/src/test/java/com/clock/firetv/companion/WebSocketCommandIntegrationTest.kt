@@ -12,6 +12,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
@@ -22,22 +25,10 @@ class WebSocketCommandIntegrationTest {
     private val receivedCommands = mutableListOf<JSONObject>()
     private var serverSocket: WebSocket? = null
 
-    private var lastTrackTitle: String? = null
-    private var lastTrackPlaylist: String? = null
-
     @Before
     fun setUp() {
-        manager = TvConnectionManager()
+        manager = TvConnectionManager(CoroutineScope(SupervisorJob() + Dispatchers.Main))
         server = MockWebServer()
-        manager.addListener(object : TvConnectionManager.EventListener {
-            override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {}
-            override fun onTrackChanged(title: String, playlist: String) {
-                lastTrackTitle = title
-                lastTrackPlaylist = playlist
-            }
-            override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onConfigApplied(version: Int) {}
-        })
 
         // Set up server that auto-authenticates and captures commands
         server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
@@ -98,8 +89,8 @@ class WebSocketCommandIntegrationTest {
         Thread.sleep(1000)
         ShadowLooper.idleMainLooper()
 
-        assertThat(lastTrackTitle).isEqualTo("New Song")
-        assertThat(lastTrackPlaylist).isEqualTo("My List")
+        assertThat(manager.tvState.nowPlayingTitle).isEqualTo("New Song")
+        assertThat(manager.tvState.nowPlayingPlaylist).isEqualTo("My List")
     }
 
 }

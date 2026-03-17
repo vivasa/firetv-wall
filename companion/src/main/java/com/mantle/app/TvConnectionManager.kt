@@ -2,20 +2,28 @@ package com.mantle.app
 
 import android.bluetooth.BluetoothDevice
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import com.firetv.protocol.ProtocolCommands
-import com.firetv.protocol.ProtocolConfig
-import com.firetv.protocol.ProtocolEvents
-import com.firetv.protocol.ProtocolKeys
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
+class TvConnectionManager(
+    private val scope: CoroutineScope
+) {
 
     companion object {
         private const val TAG = "TvConnectionMgr"
-        private const val SYNC_DEBOUNCE_MS = 500L
         private const val PING_INTERVAL_MS = 20_000L
         private const val AUTH_TIMEOUT_MS = 10_000L
     }
@@ -33,30 +41,27 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         val deviceName: String = "",
         val nowPlayingTitle: String = "",
         val nowPlayingPlaylist: String = "",
-        val isPlaying: Boolean = false
+        val isPlaying: Boolean = false,
+        val playlistTracks: List<TrackItem> = emptyList(),
+        val currentTrackIndex: Int = -1
     )
 
-    interface EventListener {
-        fun onConnectionStateChanged(state: ConnectionState)
-        fun onTrackChanged(title: String, playlist: String)
-        fun onPlaybackStateChanged(playing: Boolean)
-        fun onConfigApplied(version: Int)
-    }
+    private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
+    val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    var state: ConnectionState = ConnectionState.DISCONNECTED
-        private set
+    private val _tvState = MutableStateFlow(TvState())
+    val tvStateFlow: StateFlow<TvState> = _tvState.asStateFlow()
 
-    var tvState: TvState = TvState()
-        private set
+    private val _events = MutableSharedFlow<ProtocolEvent>()
+    val events: SharedFlow<ProtocolEvent> = _events.asSharedFlow()
 
-    var lastPairedToken: String? = null
-        private set
+    val state: ConnectionState get() = _connectionState.value
+
+    val tvState: TvState get() = _tvState.value
 
     var lastSyncedVersion: Int = -1
         private set
 
-    private val listeners = mutableListOf<EventListener>()
-    private val mainHandler = Handler(Looper.getMainLooper())
     private var transport: CompanionTransport? = null
     private var pendingToken: String? = null
 
@@ -74,25 +79,20 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     private val maxReconnectAttempts = 3
     private val reconnectDelays = longArrayOf(2000, 4000, 8000)
 
-    // Auth timeout
-    private val authTimeoutRunnable = Runnable {
-        Log.w(TAG, "Authentication timed out after ${AUTH_TIMEOUT_MS}ms")
-        ConnectionEventLog.log(ConnectionEventLog.EventType.TIMEOUT, "auth_timeout")
-        transport?.disconnect()
-        transport = null
-        handleDisconnect()
-    }
+    // Coroutine jobs
+    private var authTimeoutJob: Job? = null
+    private var pingJob: Job? = null
+    private var reconnectJob: Job? = null
 
-    // Debounce for config sync
-    private val syncRunnable = Runnable { sendSyncConfig() }
-
-    // Keepalive ping
-    private val pingRunnable = object : Runnable {
-        override fun run() {
-            if (state == ConnectionState.CONNECTED) {
-                send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.PING) })
-                mainHandler.postDelayed(this, PING_INTERVAL_MS)
-            }
+    private fun launchAuthTimeout() {
+        authTimeoutJob?.cancel()
+        authTimeoutJob = scope.launch {
+            delay(AUTH_TIMEOUT_MS)
+            Log.w(TAG, "Authentication timed out after ${AUTH_TIMEOUT_MS}ms")
+            ConnectionEventLog.log(ConnectionEventLog.EventType.TIMEOUT, "auth_timeout")
+            transport?.disconnect()
+            transport = null
+            handleDisconnect()
         }
     }
 
@@ -100,14 +100,9 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         override fun onConnected() {
             Log.d(TAG, "Transport connected, authenticating")
             updateState(ConnectionState.AUTHENTICATING)
-            mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
+            launchAuthTimeout()
             if (pendingToken != null) {
-                val auth = JSONObject().apply {
-                    put(ProtocolKeys.CMD, ProtocolCommands.AUTH)
-                    put(ProtocolKeys.TOKEN, pendingToken)
-                    put(ProtocolKeys.PROTOCOL_VERSION, ProtocolConfig.PROTOCOL_VERSION)
-                }
-                transport?.send(auth)
+                transport?.send(TvProtocolHandler.buildAuth(pendingToken!!))
             }
         }
 
@@ -117,7 +112,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
 
         override fun onDisconnected(reason: String) {
             Log.d(TAG, "Transport disconnected: $reason")
-            mainHandler.removeCallbacks(authTimeoutRunnable)
+            authTimeoutJob?.cancel()
             transport = null
             handleDisconnect()
         }
@@ -125,33 +120,9 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         override fun onError(error: String) {
             Log.e(TAG, "Transport error: $error")
             ConnectionEventLog.log(ConnectionEventLog.EventType.ERROR, error)
-            mainHandler.removeCallbacks(authTimeoutRunnable)
+            authTimeoutJob?.cancel()
             transport = null
             handleDisconnect()
-        }
-    }
-
-    fun addListener(listener: EventListener) {
-        listeners.add(listener)
-    }
-
-    fun removeListener(listener: EventListener) {
-        listeners.remove(listener)
-    }
-
-    fun registerConfigListener() {
-        MantleApp.instance.configStore.addListener(this)
-    }
-
-    fun unregisterConfigListener() {
-        MantleApp.instance.configStore.removeListener(this)
-    }
-
-    // --- MantleConfigStore.OnConfigChangedListener ---
-
-    override fun onConfigChanged(config: MantleConfig) {
-        if (state == ConnectionState.CONNECTED) {
-            scheduleSyncConfig()
         }
     }
 
@@ -205,17 +176,17 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             override fun onConnected() {
                 Log.d(TAG, "BLE transport opened for pairing")
                 updateState(ConnectionState.AUTHENTICATING)
-                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
+                launchAuthTimeout()
             }
             override fun onMessage(text: String) { handleMessage(text) }
             override fun onDisconnected(reason: String) {
-                mainHandler.removeCallbacks(authTimeoutRunnable)
+                authTimeoutJob?.cancel()
                 transport = null
                 updateState(ConnectionState.DISCONNECTED)
             }
             override fun onError(error: String) {
                 Log.e(TAG, "BLE pairing error: $error")
-                mainHandler.removeCallbacks(authTimeoutRunnable)
+                authTimeoutJob?.cancel()
                 transport = null
                 updateState(ConnectionState.DISCONNECTED)
             }
@@ -236,7 +207,7 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             override fun onConnected() {
                 Log.d(TAG, "Transport opened for pairing")
                 updateState(ConnectionState.AUTHENTICATING)
-                mainHandler.postDelayed(authTimeoutRunnable, AUTH_TIMEOUT_MS)
+                launchAuthTimeout()
             }
 
             override fun onMessage(text: String) {
@@ -244,14 +215,14 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
             }
 
             override fun onDisconnected(reason: String) {
-                mainHandler.removeCallbacks(authTimeoutRunnable)
+                authTimeoutJob?.cancel()
                 transport = null
                 updateState(ConnectionState.DISCONNECTED)
             }
 
             override fun onError(error: String) {
                 Log.e(TAG, "Pairing transport error: $error")
-                mainHandler.removeCallbacks(authTimeoutRunnable)
+                authTimeoutJob?.cancel()
                 transport = null
                 updateState(ConnectionState.DISCONNECTED)
             }
@@ -263,10 +234,9 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     fun disconnect() {
         userInitiatedDisconnect = true
         reconnectAttempt = 0
-        mainHandler.removeCallbacks(authTimeoutRunnable)
-        mainHandler.removeCallbacks(syncRunnable)
-        mainHandler.removeCallbacks(pingRunnable)
-        mainHandler.removeCallbacksAndMessages(null)
+        authTimeoutJob?.cancel()
+        pingJob?.cancel()
+        reconnectJob?.cancel()
         transport?.disconnect()
         transport = null
         updateState(ConnectionState.DISCONNECTED)
@@ -276,12 +246,16 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
         transport = null
         val canReconnect = lastToken != null && (lastHost != null || lastBleDevice != null)
         if (!userInitiatedDisconnect && reconnectAttempt < maxReconnectAttempts && canReconnect) {
-            val delay = reconnectDelays[reconnectAttempt]
+            val delayMs = reconnectDelays[reconnectAttempt]
             reconnectAttempt++
-            Log.d(TAG, "Scheduling reconnect attempt $reconnectAttempt in ${delay}ms")
-            ConnectionEventLog.log(ConnectionEventLog.EventType.RECONNECTING, "attempt $reconnectAttempt/$maxReconnectAttempts in ${delay}ms")
+            Log.d(TAG, "Scheduling reconnect attempt $reconnectAttempt in ${delayMs}ms")
+            ConnectionEventLog.log(ConnectionEventLog.EventType.RECONNECTING, "attempt $reconnectAttempt/$maxReconnectAttempts in ${delayMs}ms")
             updateState(ConnectionState.RECONNECTING)
-            mainHandler.postDelayed({ attemptReconnect() }, delay)
+            reconnectJob?.cancel()
+            reconnectJob = scope.launch {
+                delay(delayMs)
+                attemptReconnect()
+            }
         } else {
             reconnectAttempt = 0
             ConnectionEventLog.log(ConnectionEventLog.EventType.DISCONNECTED, if (userInitiatedDisconnect) "user_disconnect" else "retries_exhausted")
@@ -312,150 +286,143 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     }
 
     fun sendPairRequest() {
-        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.PAIR_REQUEST) })
+        send(TvProtocolHandler.buildPairRequest())
     }
 
     fun sendPairConfirm(pin: String) {
-        send(JSONObject().apply {
-            put(ProtocolKeys.CMD, ProtocolCommands.PAIR_CONFIRM)
-            put(ProtocolKeys.PIN, pin)
-        })
+        send(TvProtocolHandler.buildPairConfirm(pin))
     }
 
     fun sendPlay(presetIndex: Int) {
-        send(JSONObject().apply {
-            put(ProtocolKeys.CMD, ProtocolCommands.PLAY)
-            put(ProtocolKeys.PRESET_INDEX, presetIndex)
-        })
+        send(TvProtocolHandler.buildPlay(presetIndex))
     }
 
     fun sendStop() {
-        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.STOP) })
+        send(TvProtocolHandler.buildStop())
     }
 
     fun sendPause() {
-        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.PAUSE) })
+        send(TvProtocolHandler.buildPause())
     }
 
     fun sendResume() {
-        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.RESUME) })
+        send(TvProtocolHandler.buildResume())
     }
 
     fun sendSeek(offsetSec: Int) {
-        send(JSONObject().apply {
-            put(ProtocolKeys.CMD, ProtocolCommands.SEEK)
-            put(ProtocolKeys.OFFSET_SEC, offsetSec)
-        })
+        send(TvProtocolHandler.buildSeek(offsetSec))
     }
 
     fun sendSkip(direction: Int) {
-        send(JSONObject().apply {
-            put(ProtocolKeys.CMD, ProtocolCommands.SKIP)
-            put(ProtocolKeys.DIRECTION, direction)
-        })
-    }
-
-    fun sendSyncConfig() {
-        val configJson = MantleApp.instance.configStore.toJson()
-        val msg = JSONObject().apply {
-            put(ProtocolKeys.CMD, ProtocolCommands.SYNC_CONFIG)
-            put(ProtocolKeys.CONFIG, configJson)
-        }
-        Log.d(TAG, "Sending sync_config v${configJson.optInt(ProtocolKeys.VERSION)}")
-        send(msg)
+        send(TvProtocolHandler.buildSkip(direction))
     }
 
     fun sendGetState() {
-        send(JSONObject().apply { put(ProtocolKeys.CMD, ProtocolCommands.GET_STATE) })
+        send(TvProtocolHandler.buildGetState())
     }
 
-    private fun scheduleSyncConfig() {
-        mainHandler.removeCallbacks(syncRunnable)
-        mainHandler.postDelayed(syncRunnable, SYNC_DEBOUNCE_MS)
+    fun sendGetPlaylistTracks() {
+        send(TvProtocolHandler.buildGetPlaylistTracks())
     }
 
-    private fun send(json: JSONObject) {
+    fun sendPlayTrack(trackIndex: Int) {
+        send(TvProtocolHandler.buildPlayTrack(trackIndex))
+    }
+
+    fun clearTrackList() {
+        _tvState.update { it.copy(playlistTracks = emptyList(), currentTrackIndex = -1) }
+    }
+
+    fun send(json: JSONObject) {
         transport?.send(json) ?: Log.w(TAG, "Cannot send, not connected")
     }
 
-    internal fun handleMessage(text: String) {
-        try {
-            val json = JSONObject(text)
-            val evt = json.optString(ProtocolKeys.EVT, "")
-            mainHandler.post {
-                when (evt) {
-                    ProtocolEvents.AUTH_OK -> {
-                        mainHandler.removeCallbacks(authTimeoutRunnable)
-                        ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_OK)
-                        val authDeviceId = json.optString(ProtocolKeys.DEVICE_ID, "")
-                        val authDeviceName = json.optString(ProtocolKeys.DEVICE_NAME, "")
-                        if (authDeviceId.isNotEmpty()) {
-                            tvState = tvState.copy(deviceId = authDeviceId, deviceName = authDeviceName)
-                        }
-                        reconnectAttempt = 0
-                        updateState(ConnectionState.CONNECTED)
-                        sendSyncConfig()
-                        mainHandler.postDelayed(pingRunnable, PING_INTERVAL_MS)
-                    }
-                    ProtocolEvents.AUTH_FAILED -> {
-                        mainHandler.removeCallbacks(authTimeoutRunnable)
-                        val reason = json.optString(ProtocolKeys.REASON, "unknown")
-                        ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_FAILED, reason)
-                        Log.w(TAG, "Auth failed: $reason")
-                        disconnect()
-                    }
-                    ProtocolEvents.PAIRED -> {
-                        mainHandler.removeCallbacks(authTimeoutRunnable)
-                        ConnectionEventLog.log(ConnectionEventLog.EventType.CONNECTED, "paired")
-                        lastPairedToken = json.optString(ProtocolKeys.TOKEN, "")
-                        lastToken = lastPairedToken
-                        val pairedDeviceId = json.optString(ProtocolKeys.DEVICE_ID, "")
-                        val pairedDeviceName = json.optString(ProtocolKeys.DEVICE_NAME, "")
-                        tvState = tvState.copy(deviceId = pairedDeviceId, deviceName = pairedDeviceName)
-                        reconnectAttempt = 0
-                        updateState(ConnectionState.CONNECTED)
-                        sendSyncConfig()
-                        mainHandler.postDelayed(pingRunnable, PING_INTERVAL_MS)
-                    }
-                    ProtocolEvents.CONFIG_APPLIED -> {
-                        val version = json.optInt(ProtocolKeys.VERSION, -1)
-                        lastSyncedVersion = version
-                        Log.d(TAG, "Config applied on TV, version=$version")
-                        listeners.forEach { it.onConfigApplied(version) }
-                    }
-                    ProtocolEvents.TRACK_CHANGED -> {
-                        val title = json.optString(ProtocolKeys.TITLE, "")
-                        val playlist = json.optString(ProtocolKeys.PLAYLIST, "")
-                        tvState = tvState.copy(nowPlayingTitle = title, nowPlayingPlaylist = playlist)
-                        listeners.forEach { it.onTrackChanged(title, playlist) }
-                    }
-                    ProtocolEvents.PLAYBACK_STATE -> {
-                        val playing = json.optBoolean(ProtocolKeys.IS_PLAYING, false)
-                        tvState = tvState.copy(isPlaying = playing)
-                        listeners.forEach { it.onPlaybackStateChanged(playing) }
-                    }
-                    ProtocolEvents.STATE -> {
-                        val data = json.optJSONObject(ProtocolKeys.DATA) ?: return@post
-                        val stateDeviceId = data.optString(ProtocolKeys.DEVICE_ID, "")
-                        val stateDeviceName = data.optString(ProtocolKeys.DEVICE_NAME, "")
-                        if (stateDeviceId.isNotEmpty()) {
-                            tvState = tvState.copy(deviceId = stateDeviceId, deviceName = stateDeviceName)
-                        }
-                        val activePreset = data.optInt(ProtocolKeys.ACTIVE_PRESET, -1)
-                        if (activePreset >= 0) {
-                            val playing = activePreset >= 0
-                            tvState = tvState.copy(isPlaying = playing)
-                            listeners.forEach { it.onPlaybackStateChanged(playing) }
-                        }
-                    }
-                    ProtocolEvents.PONG -> { /* keepalive, ignore */ }
-                    ProtocolEvents.ERROR -> {
-                        Log.w(TAG, "Server error: ${json.optString(ProtocolKeys.MESSAGE)}")
-                    }
+    private fun startPingLoop() {
+        pingJob?.cancel()
+        pingJob = scope.launch {
+            while (isActive && state == ConnectionState.CONNECTED) {
+                delay(PING_INTERVAL_MS)
+                if (state == ConnectionState.CONNECTED) {
+                    send(TvProtocolHandler.buildPing())
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse message: $text", e)
+        }
+    }
+
+    internal fun handleMessage(text: String) {
+        val event = TvProtocolHandler.parseEvent(text) ?: return
+        scope.launch(Dispatchers.Main) {
+            when (event) {
+                is ProtocolEvent.AuthOk -> {
+                    authTimeoutJob?.cancel()
+                    ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_OK)
+                    if (event.deviceId.isNotEmpty()) {
+                        _tvState.update { it.copy(deviceId = event.deviceId, deviceName = event.deviceName) }
+                    }
+                    reconnectAttempt = 0
+                    updateState(ConnectionState.CONNECTED)
+                    startPingLoop()
+                }
+                is ProtocolEvent.AuthFailed -> {
+                    authTimeoutJob?.cancel()
+                    ConnectionEventLog.log(ConnectionEventLog.EventType.AUTH_FAILED, event.reason)
+                    Log.w(TAG, "Auth failed: ${event.reason}")
+                    _events.emit(event)
+                    disconnect()
+                }
+                is ProtocolEvent.Paired -> {
+                    authTimeoutJob?.cancel()
+                    ConnectionEventLog.log(ConnectionEventLog.EventType.CONNECTED, "paired")
+                    lastToken = event.token
+                    _tvState.update { it.copy(deviceId = event.deviceId, deviceName = event.deviceName) }
+                    reconnectAttempt = 0
+                    updateState(ConnectionState.CONNECTED)
+                    _events.emit(event)
+                    startPingLoop()
+                }
+                is ProtocolEvent.ConfigApplied -> {
+                    lastSyncedVersion = event.version
+                    Log.d(TAG, "Config applied on TV, version=${event.version}")
+                    _events.emit(event)
+                }
+                is ProtocolEvent.TrackChanged -> {
+                    _tvState.update { state ->
+                        // Find the track index by matching title against stored track list
+                        val matchIndex = state.playlistTracks.indexOfFirst { it.title == event.title }
+                        state.copy(
+                            nowPlayingTitle = event.title,
+                            nowPlayingPlaylist = event.playlist ?: "",
+                            currentTrackIndex = if (matchIndex >= 0) matchIndex else state.currentTrackIndex
+                        )
+                    }
+                }
+                is ProtocolEvent.PlaybackState -> {
+                    _tvState.update { it.copy(isPlaying = event.isPlaying) }
+                }
+                is ProtocolEvent.PlaylistTracks -> {
+                    _tvState.update { it.copy(
+                        playlistTracks = event.tracks,
+                        currentTrackIndex = event.currentIndex
+                    ) }
+                }
+                is ProtocolEvent.State -> {
+                    _tvState.update { state ->
+                        var updated = state
+                        if (event.deviceId.isNotEmpty()) {
+                            updated = updated.copy(deviceId = event.deviceId, deviceName = event.deviceName)
+                        }
+                        if (event.activePreset >= 0) {
+                            updated = updated.copy(isPlaying = true)
+                        }
+                        updated
+                    }
+                }
+                is ProtocolEvent.Pong -> { /* keepalive, ignore */ }
+                is ProtocolEvent.Error -> {
+                    Log.w(TAG, "Server error: ${event.message}")
+                    _events.emit(event)
+                }
+            }
         }
     }
 
@@ -467,9 +434,6 @@ class TvConnectionManager : MantleConfigStore.OnConfigChangedListener {
     }
 
     private fun updateState(newState: ConnectionState) {
-        state = newState
-        mainHandler.post {
-            listeners.forEach { it.onConnectionStateChanged(newState) }
-        }
+        _connectionState.value = newState
     }
 }

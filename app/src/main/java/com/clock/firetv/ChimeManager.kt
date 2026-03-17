@@ -4,18 +4,23 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sin
 
 class ChimeManager(
     private val chimeIndicator: View,
-    private val chimeDot: View
+    private val chimeDot: View,
+    private val scope: CoroutineScope
 ) {
 
     companion object {
@@ -24,7 +29,6 @@ class ChimeManager(
         private const val DECAY_DURATION_MS = 2000
         private const val NOTE_GAP_MS = 400
 
-        // Major chord: C5, E5, G5
         private const val FREQ_C5 = 523.25
         private const val FREQ_E5 = 659.25
         private const val FREQ_G5 = 783.99
@@ -36,42 +40,38 @@ class ChimeManager(
             val halfHourMs = 30 * minuteMs
             val msSinceHalfHour = nowMs % halfHourMs
             val msUntil = halfHourMs - msSinceHalfHour
-            // If we're within 1 second of a half-hour boundary, wait for the next one
             return if (msUntil < 1000L) halfHourMs else msUntil
         }
     }
 
-    private val handler = Handler(Looper.getMainLooper())
-    private var scheduledRunnable: Runnable? = null
+    private var scheduleJob: Job? = null
 
     fun scheduleNextChime(onChimePlayed: (() -> Unit)? = null) {
-        scheduledRunnable?.let { handler.removeCallbacks(it) }
+        scheduleJob?.cancel()
 
         val now = System.currentTimeMillis()
         val msUntilNextHalfHour = calculateMsUntilNextHalfHour(now)
 
-        scheduledRunnable = object : Runnable {
-            override fun run() {
+        scheduleJob = scope.launch {
+            delay(msUntilNextHalfHour)
+            while (isActive) {
                 playChime()
                 showIndicator()
                 onChimePlayed?.invoke()
-                // Schedule next one in ~30 minutes
-                handler.postDelayed(this, 30 * 60 * 1000L)
+                delay(30 * 60 * 1000L)
             }
         }
-        handler.postDelayed(scheduledRunnable!!, msUntilNextHalfHour)
     }
 
     fun stop() {
-        scheduledRunnable?.let { handler.removeCallbacks(it) }
-        scheduledRunnable = null
+        scheduleJob?.cancel()
     }
 
     private fun calculateMsUntilNextHalfHour(nowMs: Long): Long =
         Companion.calculateMsUntilNextHalfHour(nowMs)
 
     private fun playChime() {
-        Thread {
+        scope.launch(Dispatchers.IO) {
             try {
                 val totalSamples = SAMPLE_RATE * (DECAY_DURATION_MS + NOTE_GAP_MS * 2) / 1000
                 val buffer = ShortArray(totalSamples)
@@ -91,28 +91,23 @@ class ChimeManager(
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()
 
-                val bufferSize = buffer.size * 2 // 16-bit = 2 bytes per sample
+                val bufferSize = buffer.size * 2
                 val audioTrack = AudioTrack(
-                    audioAttributes,
-                    audioFormat,
-                    bufferSize,
-                    AudioTrack.MODE_STATIC,
-                    AudioManager.AUDIO_SESSION_ID_GENERATE
+                    audioAttributes, audioFormat, bufferSize,
+                    AudioTrack.MODE_STATIC, AudioManager.AUDIO_SESSION_ID_GENERATE
                 )
 
-                // Set volume to 50%
                 audioTrack.setVolume(0.5f)
                 audioTrack.write(buffer, 0, buffer.size)
                 audioTrack.play()
 
-                // Wait for playback to finish, then release
-                Thread.sleep((DECAY_DURATION_MS + NOTE_GAP_MS * 2 + 500).toLong())
+                delay((DECAY_DURATION_MS + NOTE_GAP_MS * 2 + 500).toLong())
                 audioTrack.stop()
                 audioTrack.release()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
-        }.start()
+        }
     }
 
     private fun addNote(buffer: ShortArray, frequency: Double, startSample: Int) {
@@ -122,10 +117,9 @@ class ChimeManager(
             if (idx >= buffer.size) break
 
             val t = i.toDouble() / SAMPLE_RATE
-            val envelope = exp(-3.0 * t) // Natural exponential decay
+            val envelope = exp(-3.0 * t)
             val sample = sin(2.0 * PI * frequency * t) * envelope * 0.3
 
-            // Mix with existing content
             val existing = buffer[idx].toDouble() / Short.MAX_VALUE
             val mixed = (existing + sample).coerceIn(-1.0, 1.0)
             buffer[idx] = (mixed * Short.MAX_VALUE).toInt().toShort()
@@ -133,15 +127,11 @@ class ChimeManager(
     }
 
     private fun showIndicator() {
-        handler.post {
+        scope.launch {
             chimeIndicator.visibility = View.VISIBLE
             chimeIndicator.alpha = 0f
-            chimeIndicator.animate()
-                .alpha(1f)
-                .setDuration(300)
-                .start()
+            chimeIndicator.animate().alpha(1f).setDuration(300).start()
 
-            // Pulse the dot
             val pulse = AlphaAnimation(1f, 0.3f).apply {
                 duration = 600
                 repeatMode = Animation.REVERSE
@@ -149,17 +139,15 @@ class ChimeManager(
             }
             chimeDot.startAnimation(pulse)
 
-            // Hide after 3 seconds
-            handler.postDelayed({
-                chimeIndicator.animate()
-                    .alpha(0f)
-                    .setDuration(500)
-                    .withEndAction {
-                        chimeIndicator.visibility = View.GONE
-                        chimeDot.clearAnimation()
-                    }
-                    .start()
-            }, INDICATOR_SHOW_DURATION_MS)
+            delay(INDICATOR_SHOW_DURATION_MS)
+            chimeIndicator.animate()
+                .alpha(0f)
+                .setDuration(500)
+                .withEndAction {
+                    chimeIndicator.visibility = View.GONE
+                    chimeDot.clearAnimation()
+                }
+                .start()
         }
     }
 }

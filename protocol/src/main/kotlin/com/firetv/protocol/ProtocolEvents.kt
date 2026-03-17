@@ -15,4 +15,5 @@ object ProtocolEvents {
     const val PIN_EXPIRED = "pin_expired"
     const val INVALID_PIN = "invalid_pin"
     const val DISCONNECTED = "disconnected"
+    const val PLAYLIST_TRACKS = "playlist_tracks"
 }

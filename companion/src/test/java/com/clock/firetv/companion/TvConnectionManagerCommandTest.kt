@@ -10,6 +10,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
@@ -20,7 +23,7 @@ class TvConnectionManagerCommandTest {
 
     @Before
     fun setUp() {
-        manager = TvConnectionManager()
+        manager = TvConnectionManager(CoroutineScope(SupervisorJob() + Dispatchers.Main))
         server = MockWebServer()
     }
 

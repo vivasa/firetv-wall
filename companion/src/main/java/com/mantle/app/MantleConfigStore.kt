@@ -2,12 +2,21 @@ package com.mantle.app
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Preset(val name: String, val url: String)
+data class Preset(
+    val name: String,
+    val url: String,
+    val artworkUrl: String? = null,
+    val lastPlayed: Long = 0
+)
 
 data class ClockConfig(
     val theme: Int = 0,
@@ -42,7 +51,7 @@ data class MantleConfig(
     val player: PlayerConfig = PlayerConfig()
 )
 
-class MantleConfigStore(context: Context) {
+class MantleConfigStore(context: Context, private val scope: CoroutineScope) {
 
     companion object {
         private const val PREFS_NAME = "mantle_config"
@@ -56,11 +65,14 @@ class MantleConfigStore(context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val mainHandler = Handler(Looper.getMainLooper())
     private val listeners = mutableListOf<OnConfigChangedListener>()
 
-    var config: MantleConfig = load()
-        private set
+    private val _configFlow = MutableStateFlow(load())
+    val configFlow: StateFlow<MantleConfig> = _configFlow.asStateFlow()
+
+    var config: MantleConfig
+        get() = _configFlow.value
+        private set(value) { _configFlow.value = value }
 
     fun addListener(listener: OnConfigChangedListener) {
         listeners.add(listener)
@@ -122,6 +134,20 @@ class MantleConfigStore(context: Context) {
         update { it.copy(player = it.player.copy(presets = presets, activePreset = newActive)) }
     }
 
+    fun setPresetLastPlayed(index: Int, timestamp: Long) {
+        val presets = config.player.presets.toMutableList()
+        if (index < 0 || index >= presets.size) return
+        presets[index] = presets[index].copy(lastPlayed = timestamp)
+        update { it.copy(player = it.player.copy(presets = presets)) }
+    }
+
+    fun setPresetArtworkUrl(index: Int, url: String?) {
+        val presets = config.player.presets.toMutableList()
+        if (index < 0 || index >= presets.size) return
+        presets[index] = presets[index].copy(artworkUrl = url)
+        update { it.copy(player = it.player.copy(presets = presets)) }
+    }
+
     fun reorderPreset(fromIndex: Int, toIndex: Int) {
         val presets = config.player.presets.toMutableList()
         if (fromIndex < 0 || fromIndex >= presets.size || toIndex < 0 || toIndex >= presets.size) return
@@ -168,6 +194,8 @@ class MantleConfigStore(context: Context) {
                         put(JSONObject().apply {
                             put("name", p.name)
                             put("url", p.url)
+                            if (p.artworkUrl != null) put("artworkUrl", p.artworkUrl)
+                            if (p.lastPlayed != 0L) put("lastPlayed", p.lastPlayed)
                         })
                     }
                 })
@@ -198,7 +226,7 @@ class MantleConfigStore(context: Context) {
 
     private fun notifyListeners() {
         val cfg = config
-        mainHandler.post {
+        scope.launch(Dispatchers.Main) {
             listeners.forEach { it.onConfigChanged(cfg) }
         }
     }
@@ -213,7 +241,12 @@ class MantleConfigStore(context: Context) {
         player?.optJSONArray("presets")?.let { arr ->
             for (i in 0 until arr.length()) {
                 val p = arr.getJSONObject(i)
-                presets.add(Preset(p.optString("name", ""), p.optString("url", "")))
+                presets.add(Preset(
+                    name = p.optString("name", ""),
+                    url = p.optString("url", ""),
+                    artworkUrl = p.optString("artworkUrl", null),
+                    lastPlayed = p.optLong("lastPlayed", 0)
+                ))
             }
         }
 

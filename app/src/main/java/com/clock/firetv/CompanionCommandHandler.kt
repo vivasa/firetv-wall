@@ -1,17 +1,21 @@
 package com.clock.firetv
 
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import com.firetv.protocol.ProtocolCommands
 import com.firetv.protocol.ProtocolEvents
 import com.firetv.protocol.ProtocolKeys
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
 class CompanionCommandHandler(
     private val settings: SettingsManager,
-    private val deviceIdentity: DeviceIdentity
+    private val deviceIdentity: DeviceIdentity,
+    private val scope: CoroutineScope
 ) : ClientTransport.Listener {
     companion object {
         private const val TAG = "CmdHandler"
@@ -43,10 +47,11 @@ class CompanionCommandHandler(
         fun onSeek(offsetSec: Int)
         fun onSkip(direction: Int)
         fun onSyncConfig(config: JSONObject)
+        fun onPlayTrack(trackIndex: Int)
+        fun onGetPlaylistTracks()
     }
 
     var listener: Listener? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
     private var activeTransport: ClientTransport? = null
 
     // Pairing state
@@ -54,6 +59,7 @@ class CompanionCommandHandler(
     private var pinExpiresAt: Long = 0
     private var failedAttempts = 0
     private var rateLimitUntil: Long = 0
+    private var pinDismissJob: Job? = null
 
     // -- ClientTransport.Listener --
 
@@ -63,7 +69,7 @@ class CompanionCommandHandler(
             if (existing !== transport) {
                 Log.i(TAG, "replacing previous client")
                 existing.closeConnection("replaced")
-                mainHandler.post { listener?.onCompanionDisconnected() }
+                scope.launch(Dispatchers.Main) { listener?.onCompanionDisconnected() }
             }
         }
     }
@@ -86,7 +92,7 @@ class CompanionCommandHandler(
         Log.i(TAG, "client_disconnected: $reason")
         if (activeTransport === transport) {
             activeTransport = null
-            mainHandler.post { listener?.onCompanionDisconnected() }
+            scope.launch(Dispatchers.Main) { listener?.onCompanionDisconnected() }
         }
     }
 
@@ -138,14 +144,16 @@ class CompanionCommandHandler(
         pinExpiresAt = now + PIN_VALIDITY_MS
         failedAttempts = 0
 
-        mainHandler.post { listener?.onShowPin(pin) }
+        scope.launch(Dispatchers.Main) { listener?.onShowPin(pin) }
 
-        mainHandler.postDelayed({
+        pinDismissJob?.cancel()
+        pinDismissJob = scope.launch(Dispatchers.Main) {
+            delay(PIN_VALIDITY_MS)
             if (currentPin == pin) {
                 currentPin = null
                 listener?.onDismissPin()
             }
-        }, PIN_VALIDITY_MS)
+        }
     }
 
     private fun handlePairConfirm(pin: String, transport: ClientTransport) {
@@ -163,7 +171,7 @@ class CompanionCommandHandler(
                 put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                 put(ProtocolKeys.REASON, ProtocolEvents.PIN_EXPIRED)
             })
-            mainHandler.post { listener?.onDismissPin() }
+            scope.launch(Dispatchers.Main) { listener?.onDismissPin() }
             return
         }
 
@@ -176,7 +184,7 @@ class CompanionCommandHandler(
                     put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
                     put(ProtocolKeys.REASON, ProtocolEvents.RATE_LIMITED)
                 })
-                mainHandler.post { listener?.onDismissPin() }
+                scope.launch(Dispatchers.Main) { listener?.onDismissPin() }
             } else {
                 transport.sendEvent(JSONObject().apply {
                     put(ProtocolKeys.EVT, ProtocolEvents.AUTH_FAILED)
@@ -199,7 +207,7 @@ class CompanionCommandHandler(
             put(ProtocolKeys.DEVICE_NAME, deviceIdentity.deviceName)
         })
 
-        mainHandler.post {
+        scope.launch(Dispatchers.Main) {
             listener?.onDismissPin()
             listener?.onCompanionConnected()
         }
@@ -220,7 +228,7 @@ class CompanionCommandHandler(
                 put(ProtocolKeys.DEVICE_ID, deviceIdentity.deviceId)
                 put(ProtocolKeys.DEVICE_NAME, deviceIdentity.deviceName)
             })
-            mainHandler.post { listener?.onCompanionConnected() }
+            scope.launch(Dispatchers.Main) { listener?.onCompanionConnected() }
 
             transport.sendEvent(JSONObject().apply {
                 put(ProtocolKeys.EVT, ProtocolEvents.STATE)
@@ -236,7 +244,7 @@ class CompanionCommandHandler(
     }
 
     private fun handleAuthenticatedCommand(cmd: String, json: JSONObject, transport: ClientTransport) {
-        mainHandler.post {
+        scope.launch(Dispatchers.Main) {
             when (cmd) {
                 ProtocolCommands.PLAY -> listener?.onPlayPreset(json.optInt(ProtocolKeys.PRESET_INDEX, -1))
                 ProtocolCommands.STOP -> listener?.onStopPlayback()
@@ -257,7 +265,7 @@ class CompanionCommandHandler(
                 ProtocolCommands.SEEK -> listener?.onSeek(json.optInt(ProtocolKeys.OFFSET_SEC, 0))
                 ProtocolCommands.SKIP -> listener?.onSkip(json.optInt(ProtocolKeys.DIRECTION, 1))
                 ProtocolCommands.SYNC_CONFIG -> {
-                    val config = json.optJSONObject(ProtocolKeys.CONFIG) ?: return@post
+                    val config = json.optJSONObject(ProtocolKeys.CONFIG) ?: return@launch
                     listener?.onSyncConfig(config)
                     val version = config.optInt(ProtocolKeys.VERSION, -1)
                     transport.sendEvent(JSONObject().apply {
@@ -271,6 +279,8 @@ class CompanionCommandHandler(
                         put(ProtocolKeys.DATA, buildStateJson())
                     })
                 }
+                ProtocolCommands.PLAY_TRACK -> listener?.onPlayTrack(json.optInt(ProtocolKeys.TRACK_INDEX, -1))
+                ProtocolCommands.GET_PLAYLIST_TRACKS -> listener?.onGetPlaylistTracks()
                 else -> {
                     transport.sendEvent(JSONObject().apply {
                         put(ProtocolKeys.EVT, ProtocolEvents.ERROR)

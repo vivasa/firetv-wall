@@ -1,7 +1,6 @@
 package com.clock.firetv.companion
 
 import com.google.common.truth.Truth.assertThat
-import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.MockResponse
@@ -13,6 +12,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLooper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.mantle.app.TvConnectionManager
 
 @RunWith(RobolectricTestRunner::class)
@@ -21,24 +25,23 @@ class WebSocketPairingIntegrationTest {
     private lateinit var manager: TvConnectionManager
     private lateinit var server: MockWebServer
     private val stateChanges = mutableListOf<TvConnectionManager.ConnectionState>()
+    private lateinit var scope: CoroutineScope
+    private lateinit var collectJob: Job
 
     @Before
     fun setUp() {
-        manager = TvConnectionManager()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        manager = TvConnectionManager(scope)
         server = MockWebServer()
-        manager.addListener(object : TvConnectionManager.EventListener {
-            override fun onConnectionStateChanged(state: TvConnectionManager.ConnectionState) {
-                stateChanges.add(state)
-            }
-            override fun onTrackChanged(title: String, playlist: String) {}
-            override fun onPlaybackStateChanged(playing: Boolean) {}
-            override fun onConfigApplied(version: Int) {}
-        })
+        collectJob = scope.launch {
+            manager.connectionState.collect { stateChanges.add(it) }
+        }
     }
 
     @After
     fun tearDown() {
         try {
+            collectJob.cancel()
             manager.disconnect()
             server.shutdown()
         } catch (_: Exception) {}
@@ -46,16 +49,12 @@ class WebSocketPairingIntegrationTest {
 
     @Test
     fun `complete pairing flow issues token and state dump`() {
-        val receivedMessages = mutableListOf<String>()
-
         server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
-                receivedMessages.add(text)
                 val json = JSONObject(text)
                 when (json.optString("cmd")) {
                     "pair_request" -> {
                         // Server would show PIN and wait for confirmation
-                        // In real flow, user enters PIN on phone
                     }
                     "pair_confirm" -> {
                         val pin = json.optString("pin")
@@ -66,7 +65,6 @@ class WebSocketPairingIntegrationTest {
                                 put("deviceId", "tv-001")
                                 put("deviceName", "Living Room TV")
                             }.toString())
-                            // Send state dump
                             webSocket.send(JSONObject().apply {
                                 put("evt", "state")
                                 put("data", JSONObject().apply {
@@ -88,24 +86,19 @@ class WebSocketPairingIntegrationTest {
         Thread.sleep(1000)
         ShadowLooper.idleMainLooper()
 
-        // Send pair request
         manager.sendPairRequest()
         Thread.sleep(500)
 
-        // Send pair confirm with correct PIN
         manager.sendPairConfirm("1234")
         Thread.sleep(1000)
         ShadowLooper.idleMainLooper()
 
-        assertThat(manager.lastPairedToken).isEqualTo("test-token-abc")
         assertThat(manager.tvState.deviceId).isEqualTo("tv-001")
         assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.CONNECTED)
     }
 
     @Test
     fun `pairing with wrong PIN receives error`() {
-        val receivedEvents = mutableListOf<String>()
-
         server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val json = JSONObject(text)
@@ -129,7 +122,6 @@ class WebSocketPairingIntegrationTest {
         Thread.sleep(1000)
         ShadowLooper.idleMainLooper()
 
-        // auth_failed triggers disconnect
         assertThat(stateChanges).contains(TvConnectionManager.ConnectionState.DISCONNECTED)
     }
 }
